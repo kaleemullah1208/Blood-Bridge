@@ -701,3 +701,6 @@ export const AdminDashboardPage = () => {
     </div>
   );
 };
+
+export { AdminDashboardPage as AdminDashboard };
+export default AdminDashboardPage;

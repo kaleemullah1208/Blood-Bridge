@@ -762,3 +762,6 @@ export const DashboardPage = () => {
     </div>
   );
 };
+
+export { DashboardPage as Dashboard };
+export default DashboardPage;
