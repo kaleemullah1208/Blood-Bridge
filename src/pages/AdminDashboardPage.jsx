@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth, ADMIN_EMAIL, ADMIN_PASS } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -80,13 +81,20 @@ export const AdminDashboardPage = () => {
     };
   }, []);
 
+  const refreshUnsub = useRef(null);
+
   const handleManualRefresh = () => {
+    // Cancel any previous manual-refresh listener to prevent memory leaks
+    if (refreshUnsub.current && typeof refreshUnsub.current === 'function') {
+      refreshUnsub.current();
+    }
     setRefreshing(true);
-    subscribeToAllUsers((data) => {
+    const unsub = subscribeToAllUsers((data) => {
       setUsers(data);
       setRefreshing(false);
       showInfo("Realtime user database synchronized.");
     });
+    refreshUnsub.current = unsub;
   };
 
   // Handler for Admin Quick Login
@@ -279,7 +287,7 @@ export const AdminDashboardPage = () => {
             <button
               type="submit"
               disabled={loggingInAdmin}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 hover:from-purple-800 hover:to-indigo-700 text-white font-bold text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 transition"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 hover:from-purple-800 hover:to-indigo-700 text-white font-bold text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 transition cursor-pointer"
             >
               {loggingInAdmin ? (
                 <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -291,6 +299,14 @@ export const AdminDashboardPage = () => {
               )}
             </button>
           </form>
+
+          {/* Return Link */}
+          <div className="pt-3 border-t border-slate-100 text-center text-xs text-slate-500">
+            Return to{' '}
+            <Link to="/" className="font-bold text-slate-800 hover:text-red-600 underline">
+              Community Home
+            </Link>
+          </div>
         </div>
       </div>
     );

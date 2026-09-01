@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, MessageCircle, MapPin, CheckCircle, Clock, Droplets } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Droplets, ShieldCheck } from 'lucide-react';
 
 export const DonorCard = ({ donor }) => {
   const {

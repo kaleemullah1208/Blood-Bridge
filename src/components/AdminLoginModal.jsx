@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, ADMIN_EMAIL, ADMIN_PASS } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ShieldCheck, Lock, Mail, Eye, EyeOff, AlertCircle, X, ArrowRight, Shield, Sparkles, Key } from 'lucide-react';
@@ -178,10 +178,21 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
           </button>
         </form>
 
-        {/* Security Footer Notice */}
-        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
-          <Shield className="w-3.5 h-3.5 text-purple-600" />
-          <span>256-Bit Encrypted Clinical & Operations Session</span>
+        {/* Direct page link & security footer */}
+        <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-center">
+          <div>
+            <Link
+              to="/admin"
+              onClick={onClose}
+              className="text-xs font-bold text-purple-700 hover:text-purple-900 hover:underline"
+            >
+              Open Dedicated Admin Portal Page →
+            </Link>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
+            <Shield className="w-3.5 h-3.5 text-purple-600" />
+            <span>256-Bit Encrypted Clinical & Operations Session</span>
+          </div>
         </div>
       </div>
     </div>

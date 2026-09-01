@@ -60,9 +60,12 @@ export const DashboardPage = () => {
 
   // Keep activeTab aligned if role changes
   useEffect(() => {
-    if (isDonor && activeTab === 'find-donors' && !liveRequests.length) {
+    if (isDonor && activeTab === 'find-donors') {
       setActiveTab('emergency-feed');
+    } else if (!isDonor && activeTab === 'emergency-feed') {
+      setActiveTab('find-donors');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDonor]);
 
   // Real-time data streams

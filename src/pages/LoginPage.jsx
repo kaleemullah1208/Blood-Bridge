@@ -95,6 +95,14 @@ export const LoginPage = () => {
       }
     } catch (err) {
       console.error("Login submission error:", err);
+      // Show the account-not-found banner for user-not-found errors
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/invalid-credential' ||
+        (err.message && err.message.toLowerCase().includes('no account found'))
+      ) {
+        setAccountNotFoundError(true);
+      }
       showError(err.message || 'Failed to sign in. Please verify your credentials.');
     } finally {
       setLoading(false);

@@ -7,6 +7,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminRoute } from './components/AdminRoute';
 
 // Pages
 import { HomePage } from './pages/HomePage';
@@ -17,6 +18,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export const App = () => {
   return (
@@ -33,14 +35,20 @@ export const App = () => {
                 {/* Public Views */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/find-donors" element={<FindDonorsPage />} />
-                <Route path="/post-request" element={<PostRequestPage />} />
-                <Route path="/admin" element={<AdminDashboardPage />} />
-                <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
                 <Route path="/admin-login" element={<AdminLoginPage />} />
+                <Route path="/adminlogin" element={<AdminLoginPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
 
-                {/* Protected Views */}
+                {/* Protected: requires login */}
+                <Route
+                  path="/post-request"
+                  element={
+                    <ProtectedRoute>
+                      <PostRequestPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/dashboard"
                   element={
@@ -50,8 +58,74 @@ export const App = () => {
                   }
                 />
 
-                {/* Catch-all redirect */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* Admin & Operations Routes & Aliases */}
+                <Route
+                  path="/admin"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin-panel"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin-portal"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin/panel"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin/portal"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin/dashboard"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/adminpanel"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/adminportal"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+
+                {/* 404 Not Found Page */}
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </main>
 

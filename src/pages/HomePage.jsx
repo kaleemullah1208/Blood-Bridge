@@ -4,18 +4,19 @@ import { subscribeToActiveBloodRequests, subscribeToDonors } from '../firebase/s
 import { BloodRequestCard } from '../components/BloodRequestCard';
 import { StatsCounter } from '../components/StatsCounter';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { 
-  Heart, 
-  Droplet, 
-  Search, 
-  PlusCircle, 
-  ShieldCheck, 
-  Clock, 
-  Radio, 
+import {
+  Heart,
+  Droplet,
+  Search,
+  PlusCircle,
+  ShieldCheck,
+  Clock,
+  Radio,
   ArrowRight,
-  Sparkles,
   Zap,
-  Users
+  Users,
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 
 const BLOOD_GROUPS = ['All', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -26,96 +27,111 @@ export const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedGroup, setSelectedGroup] = useState('All');
 
-  // Real-time Firestore onSnapshot subscriptions
   useEffect(() => {
     setLoading(true);
     const unsubscribeReqs = subscribeToActiveBloodRequests((data) => {
       setRequests(data);
       setLoading(false);
     });
-
     const unsubscribeDonors = subscribeToDonors((data) => {
       setDonors(data);
     });
-
     return () => {
       if (typeof unsubscribeReqs === 'function') unsubscribeReqs();
       if (typeof unsubscribeDonors === 'function') unsubscribeDonors();
     };
   }, []);
 
-  const filteredRequests = requests.filter(req => {
-    if (selectedGroup === 'All') return true;
-    return req.requiredBloodGroup === selectedGroup;
-  });
-
-  const criticalCount = requests.filter(r => r.urgencyLevel === 'Critical').length;
+  const filteredRequests = requests.filter(req =>
+    selectedGroup === 'All' ? true : req.requiredBloodGroup === selectedGroup
+  );
 
   return (
-    <div className="space-y-16 pb-16">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-red-50/80 via-white to-slate-50 pt-12 pb-20 border-b border-slate-200/60">
-        {/* Ambient background glow */}
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-r from-red-400/10 via-rose-500/15 to-amber-400/10 blur-3xl pointer-events-none -z-10" />
+    <div className="pb-16">
+      {/* ── Hero Section ── */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-red-950/40 to-slate-900 pt-16 pb-24 text-white">
+        {/* Decorative blobs */}
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-red-600/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-rose-500/10 blur-3xl pointer-events-none" />
+        {/* Subtle dot-grid overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '28px 28px' }}
+        />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-6">
-            {/* Live Status Pill */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-100 text-red-700 text-xs sm:text-sm font-bold border border-red-200/80 shadow-xs">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
-              <Radio className="w-4 h-4 text-red-600" />
-              <span>Real-Time Blood Donor Network Active</span>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto space-y-7">
+            {/* Live pill */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-500/15 text-red-300 text-xs sm:text-sm font-bold border border-red-500/25 backdrop-blur-sm">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+              <Radio className="w-4 h-4" />
+              <span>Real-Time Blood Donor Network — Live</span>
             </div>
 
             {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
-              Connecting Blood Donors With <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-rose-600">Lives In Need</span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08]">
+              Connecting Blood Donors<br />
+              With{' '}
+              <span className="relative inline-block">
+                <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-rose-400 to-red-300">
+                  Lives In Need
+                </span>
+                <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500/60 to-rose-400/60 rounded-full" />
+              </span>
             </h1>
 
-            {/* Subheading */}
-            <p className="text-lg sm:text-xl text-slate-600 font-normal leading-relaxed">
-              Every second matters during medical emergencies. BloodBridge instantly broadcasts urgent blood requests to nearby available donors in real time.
+            {/* Sub */}
+            <p className="text-lg sm:text-xl text-slate-300 leading-relaxed max-w-2xl mx-auto">
+              Every second matters during medical emergencies. BloodBridge instantly broadcasts urgent requests to nearby verified donors in real time.
             </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            {/* CTA row */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <Link
                 to="/post-request"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-red-600 text-white font-bold text-base shadow-xl shadow-red-600/30 hover:bg-red-700 hover:shadow-red-600/40 active:scale-95 transition duration-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-base shadow-2xl shadow-red-700/50 active:scale-95 transition-all duration-200"
               >
                 <PlusCircle className="w-5 h-5" />
-                <span>Post Emergency Request</span>
+                Post Emergency Request
               </Link>
               <Link
                 to="/find-donors"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-white text-slate-800 font-bold text-base border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 active:scale-95 transition duration-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-base border border-white/20 backdrop-blur-sm active:scale-95 transition-all duration-200"
               >
-                <Search className="w-5 h-5 text-red-600" />
-                <span>Find Donors Near You</span>
+                <Search className="w-5 h-5 text-red-400" />
+                Find Donors Near You
               </Link>
             </div>
 
-            {/* Micro Highlights */}
-            <div className="flex flex-wrap items-center justify-center gap-6 pt-6 text-xs sm:text-sm font-semibold text-slate-500">
+            {/* Trust badges */}
+            <div className="flex flex-wrap items-center justify-center gap-6 pt-4 text-xs sm:text-sm font-semibold text-slate-400">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>100% Free & Community Driven</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                100% Free & Community Driven
               </div>
               <div className="flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-amber-500" />
-                <span>Zero Middlemen / Direct Contact</span>
+                <Zap className="w-4 h-4 text-amber-400" />
+                Zero Middlemen — Direct Contact
               </div>
               <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-red-500" />
-                <span>Real-Time Firestore Sync</span>
+                <Clock className="w-4 h-4 text-red-400" />
+                Real-Time Firestore Sync
               </div>
             </div>
+          </div>
+
+          {/* Scroll hint */}
+          <div className="mt-14 flex justify-center animate-bounce">
+            <ChevronDown className="w-6 h-6 text-slate-500" />
           </div>
         </div>
       </section>
 
-      {/* Stats Banner Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10">
+      {/* ── Stats Banner ── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
         <StatsCounter
           totalDonors={donors.length}
           activeRequestsCount={requests.length}
@@ -123,35 +139,36 @@ export const HomePage = () => {
         />
       </section>
 
-      {/* Real-Time Emergency Requests Feed */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200/80 pb-5">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-600 mb-1">
-              <Radio className="w-4 h-4 text-red-600 animate-pulse" />
-              <span>Live Emergency Broadcast</span>
+      {/* ── Live Feed ── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 space-y-7">
+        {/* Section header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-5 border-b border-slate-200">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-600">
+              <Radio className="w-3.5 h-3.5 animate-pulse" />
+              Live Emergency Broadcast
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Active Blood Requests Feed
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500">
               Live updates direct from hospitals and family members needing immediate transfusions.
             </p>
           </div>
 
           <Link
             to="/post-request"
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700 hover:underline self-start md:self-auto"
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700 group self-start md:self-auto whitespace-nowrap"
           >
-            <span>Need blood for a patient?</span>
-            <ArrowRight className="w-4 h-4" />
+            Need blood for a patient?
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
 
-        {/* Blood Group Filter Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 flex-shrink-0">
-            Filter Group:
+        {/* Blood group filter chips */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex-shrink-0 mr-1">
+            Filter:
           </span>
           {BLOOD_GROUPS.map((group) => (
             <button
@@ -159,8 +176,8 @@ export const HomePage = () => {
               onClick={() => setSelectedGroup(group)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex-shrink-0 ${
                 selectedGroup === group
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:border-red-300 hover:text-red-600'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/25 scale-105'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
               }`}
             >
               {group}
@@ -168,9 +185,9 @@ export const HomePage = () => {
           ))}
         </div>
 
-        {/* Requests Feed Grid */}
+        {/* Grid */}
         {loading ? (
-          <div className="py-16">
+          <div className="py-20">
             <LoadingSpinner text="Syncing real-time emergency feed..." />
           </div>
         ) : filteredRequests.length > 0 ? (
@@ -180,68 +197,105 @@ export const HomePage = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto shadow-xs">
-            <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white rounded-3xl p-14 text-center border border-slate-200 max-w-md mx-auto shadow-sm">
+            <div className="w-16 h-16 rounded-full bg-red-50 text-red-400 flex items-center justify-center mx-auto mb-4">
               <Droplet className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">No active {selectedGroup !== 'All' ? selectedGroup : ''} requests</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              No active {selectedGroup !== 'All' ? selectedGroup : ''} requests
+            </h3>
             <p className="text-sm text-slate-500 mt-1 mb-6">
-              There are currently no active emergency broadcasts matching this filter.
+              No emergency broadcasts match this filter right now.
             </p>
             <Link
               to="/post-request"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition shadow-sm"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Create New Request</span>
+              Create New Request
             </Link>
           </div>
         )}
       </section>
 
-      {/* How It Works Section */}
-      <section className="bg-white border-y border-slate-200/80 py-16">
+      {/* ── How It Works ── */}
+      <section className="mt-20 bg-white border-y border-slate-200 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-xs font-bold uppercase tracking-widest text-red-600">Simple 3-Step Process</span>
-            <h2 className="text-3xl font-extrabold text-slate-900 mt-1">How BloodBridge Saves Lives</h2>
-            <p className="text-slate-500 text-sm mt-2">
-              Designed for speed when seconds matter most.
-            </p>
+          <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-red-600">
+              <Sparkles className="w-3.5 h-3.5" />
+              Simple 3-Step Process
+            </span>
+            <h2 className="text-3xl font-extrabold text-slate-900">How BloodBridge Saves Lives</h2>
+            <p className="text-slate-500 text-sm">Designed for speed when every second matters.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Step 1 */}
-            <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-start">
-              <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center text-lg font-black mb-4 shadow-md shadow-red-600/20">
-                1
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-10">
+            {[
+              {
+                step: '01',
+                color: 'from-red-500 to-rose-600',
+                shadow: 'shadow-red-500/20',
+                title: 'Post Urgent Request',
+                desc: 'Fill out the emergency blood requirement with hospital details, required units, and urgency level. Takes under 60 seconds.'
+              },
+              {
+                step: '02',
+                color: 'from-amber-500 to-orange-500',
+                shadow: 'shadow-amber-500/20',
+                title: 'Real-Time Broadcast',
+                desc: 'The alert appears instantly on the global live feed and nearby available donors receive a notification immediately.'
+              },
+              {
+                step: '03',
+                color: 'from-emerald-500 to-teal-500',
+                shadow: 'shadow-emerald-500/20',
+                title: 'Direct Contact',
+                desc: 'Connect via phone or WhatsApp directly — no middlemen. Donors and patients coordinate transfusion in real time.'
+              }
+            ].map(({ step, color, shadow, title, desc }) => (
+              <div key={step} className="relative group p-7 rounded-3xl bg-slate-50 border border-slate-100 hover:border-red-100 hover:bg-white hover:shadow-lg transition-all duration-300">
+                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br ${color} text-white font-black text-sm shadow-lg ${shadow} mb-5 group-hover:scale-105 transition-transform`}>
+                  {step}
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{desc}</p>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Post Urgent Request</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Fill out the emergency blood requirement with hospital details, required units, and urgency level.
-              </p>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Step 2 */}
-            <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-start">
-              <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-lg font-black mb-4 shadow-md shadow-rose-600/20">
-                2
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Real-Time Broadcast</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                The alert appears instantly on the global live feed and nearby donors are searchable with live availability tags.
-              </p>
+      {/* ── CTA Banner ── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 p-10 sm:p-14 text-white text-center shadow-2xl shadow-red-600/30">
+          <div className="absolute -top-16 -right-16 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-black/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="relative z-10 max-w-2xl mx-auto space-y-5">
+            <div className="flex justify-center">
+              <Heart className="w-10 h-10 fill-white/30 text-white" />
             </div>
-
-            {/* Step 3 */}
-            <div className="relative p-6 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-start">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg font-black mb-4 shadow-md shadow-emerald-600/20">
-                3
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Direct Contact & Transfusion</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Connect directly via Phone call or WhatsApp without registration barriers to arrange immediate donation.
-              </p>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+              Ready to Save a Life Today?
+            </h2>
+            <p className="text-red-100 text-base leading-relaxed">
+              Join thousands of voluntary blood donors who have already made a difference. Registration is free and takes less than 2 minutes.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+              <Link
+                to="/register"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl bg-white text-red-700 font-bold text-sm hover:bg-red-50 active:scale-95 transition shadow-lg"
+              >
+                <Users className="w-4 h-4" />
+                Register as a Donor
+              </Link>
+              <Link
+                to="/find-donors"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-bold text-sm active:scale-95 transition"
+              >
+                <Search className="w-4 h-4" />
+                Find Donors Now
+              </Link>
             </div>
           </div>
         </div>
