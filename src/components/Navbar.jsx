@@ -17,11 +17,11 @@ import {
   ShieldCheck,
   Crown,
   UserPlus,
-  ChevronDown
+  HeartHandshake
 } from 'lucide-react';
 
 export const Navbar = () => {
-  const { currentUser, userProfile, isAdmin, logout } = useAuth();
+  const { currentUser, userProfile, isAdmin, isDonor, logout } = useAuth();
   const { showSuccess, showError } = useToast();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -74,10 +74,13 @@ export const Navbar = () => {
         : 'text-slate-700 hover:bg-slate-100 hover:text-red-600'
     }`;
 
+  const displayName = userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Member';
+  const roleLabel = isAdmin ? 'Admin' : (isDonor ? 'Donor' : 'Seeker');
+
   return (
     <>
       <header
-        className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b transition-shadow duration-200 ${
+        className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b transition-all duration-200 ${
           scrolled ? 'border-slate-200 shadow-sm' : 'border-transparent'
         }`}
       >
@@ -95,13 +98,13 @@ export const Navbar = () => {
                   <span className="text-lg font-extrabold tracking-tight text-slate-900">Blood</span>
                   <span className="text-lg font-extrabold tracking-tight text-red-600">Bridge</span>
                 </div>
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400 mt-px">
+                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400 mt-0.5">
                   Emergency Network
                 </p>
               </div>
             </Link>
 
-            {/* Desktop nav */}
+            {/* Desktop Navigation Links */}
             <nav className="hidden md:flex items-center gap-1">
               <NavLink to="/" end className={desktopLink}>Home</NavLink>
               <NavLink to="/find-donors" className={desktopLink}>
@@ -112,6 +115,8 @@ export const Navbar = () => {
                 <PlusCircle className="w-4 h-4 text-red-500" />
                 Post Request
               </NavLink>
+
+              {/* ONLY show Admin link to verified Administrators */}
               {isAdmin && (
                 <NavLink
                   to="/admin"
@@ -130,9 +135,9 @@ export const Navbar = () => {
               )}
             </nav>
 
-            {/* Desktop right */}
-            <div className="hidden md:flex items-center gap-2">
-              {/* Urgent alert badge */}
+            {/* Desktop Right Actions */}
+            <div className="hidden md:flex items-center gap-3">
+              {/* Urgent Requests Alert Pill */}
               {urgentCount > 0 && (
                 <Link
                   to="/"
@@ -147,29 +152,30 @@ export const Navbar = () => {
                 </Link>
               )}
 
-              {/* Admin / Staff portal button */}
-              {!isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setShowAdminModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200/80 transition cursor-pointer"
-                  title="Admin Portal & Operations"
-                >
-                  <ShieldCheck className="w-4 h-4 text-purple-600" />
-                  Admin Portal
-                </button>
-              )}
-
+              {/* Authenticated User / Donor Profile Header */}
               {currentUser ? (
-                <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 ml-1">
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
                   <Link
                     to="/dashboard"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold transition"
+                    className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-slate-100/90 hover:bg-red-50 hover:border-red-200 border border-transparent text-slate-800 text-sm font-semibold transition group"
                   >
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-red-600 to-rose-500 text-white flex items-center justify-center text-xs font-bold">
-                      {(userProfile?.name || currentUser?.displayName || 'U').charAt(0).toUpperCase()}
+                    <div className={`w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs ${
+                      isAdmin 
+                        ? 'bg-gradient-to-tr from-purple-700 to-indigo-600'
+                        : (isDonor ? 'bg-gradient-to-tr from-red-600 to-rose-500' : 'bg-gradient-to-tr from-slate-700 to-slate-900')
+                    }`}>
+                      {displayName.charAt(0).toUpperCase()}
                     </div>
-                    <span className="max-w-[110px] truncate">{userProfile?.name || 'Dashboard'}</span>
+                    <div className="flex flex-col text-left">
+                      <span className="max-w-[120px] truncate text-xs font-bold text-slate-900 group-hover:text-red-600 transition-colors">
+                        {displayName}
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isAdmin ? 'text-purple-600' : (isDonor ? 'text-red-600' : 'text-slate-500')
+                      }`}>
+                        {roleLabel}
+                      </span>
+                    </div>
                   </Link>
                   <button
                     onClick={handleLogout}
@@ -180,7 +186,7 @@ export const Navbar = () => {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 pl-2 border-l border-slate-200 ml-1">
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
                   <Link
                     to="/login"
                     className="px-3.5 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition"
@@ -198,23 +204,13 @@ export const Navbar = () => {
               )}
             </div>
 
-            {/* Mobile controls */}
-            <div className="flex md:hidden items-center gap-1.5">
+            {/* Mobile menu button */}
+            <div className="flex md:hidden items-center gap-2">
               {urgentCount > 0 && (
                 <span className="flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-red-500 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
                 </span>
-              )}
-              {!isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setShowAdminModal(true)}
-                  className="p-2 rounded-xl text-purple-600 hover:bg-purple-50 transition"
-                  title="Staff Portal"
-                >
-                  <ShieldCheck className="w-5 h-5" />
-                </button>
               )}
               <button
                 onClick={() => setIsOpen(!isOpen)}
@@ -227,9 +223,9 @@ export const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile Menu */}
         {isOpen && (
-          <div className="md:hidden border-t border-slate-100 bg-white px-4 pt-3 pb-6 space-y-1 shadow-lg">
+          <div className="md:hidden border-t border-slate-100 bg-white px-4 pt-3 pb-6 space-y-1 shadow-lg animate-fade-in">
             <NavLink to="/" end onClick={() => setIsOpen(false)} className={mobileLink}>Home</NavLink>
             <NavLink to="/find-donors" onClick={() => setIsOpen(false)} className={mobileLink}>
               <Search className="w-4 h-4 text-red-500" />
@@ -240,6 +236,7 @@ export const Navbar = () => {
               Post Blood Request
             </NavLink>
 
+            {/* ONLY show Admin link to Admins */}
             {isAdmin && (
               <NavLink to="/admin" onClick={() => setIsOpen(false)} className={mobileLink}>
                 <Crown className="w-4 h-4 text-purple-600" />
@@ -247,23 +244,12 @@ export const Navbar = () => {
               </NavLink>
             )}
 
-            {!isAdmin && (
-              <button
-                type="button"
-                onClick={() => { setIsOpen(false); setShowAdminModal(true); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-purple-50 text-purple-800 hover:bg-purple-100 transition cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4 text-purple-600" />
-                Admin & Operations Portal
-              </button>
-            )}
-
             <div className="pt-3 mt-2 border-t border-slate-100 space-y-1">
               {currentUser ? (
                 <>
                   <NavLink to="/dashboard" onClick={() => setIsOpen(false)} className={mobileLink}>
-                    <User className="w-4 h-4 text-slate-500" />
-                    Dashboard — {userProfile?.name || 'Profile'}
+                    <User className="w-4 h-4 text-red-500" />
+                    Dashboard ({roleLabel})
                   </NavLink>
                   <button
                     onClick={handleLogout}
@@ -300,3 +286,4 @@ export const Navbar = () => {
     </>
   );
 };
+

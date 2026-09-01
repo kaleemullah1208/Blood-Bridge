@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Droplet, Heart, ShieldAlert, HeartHandshake, Mail, Github } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Droplet, Heart, ShieldAlert, HeartHandshake, Mail, ShieldCheck } from 'lucide-react';
 
 export const Footer = () => {
+  const { isAdmin } = useAuth();
   const year = new Date().getFullYear();
 
   return (
@@ -35,12 +37,11 @@ export const Footer = () => {
             <h4 className="text-white text-xs font-bold uppercase tracking-widest mb-5">Platform</h4>
             <ul className="space-y-3 text-sm">
               {[
-                { to: '/', label: 'Emergency Feed' },
+                { to: '/', label: 'Emergency Requests Feed' },
                 { to: '/find-donors', label: 'Find Donors Directory' },
                 { to: '/post-request', label: 'Request Blood Now' },
                 { to: '/register', label: 'Register as a Donor' },
-                { to: '/login', label: 'Sign In' },
-                { to: '/admin', label: 'Admin Portal & Controls' },
+                { to: '/login', label: 'Sign In' }
               ].map(({ to, label }) => (
                 <li key={to}>
                   <Link to={to} className="hover:text-red-400 transition-colors duration-150">
@@ -48,6 +49,14 @@ export const Footer = () => {
                   </Link>
                 </li>
               ))}
+              {isAdmin && (
+                <li>
+                  <Link to="/admin" className="text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Admin Operations Console
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 
@@ -105,7 +114,6 @@ export const Footer = () => {
           </p>
 
           <div className="flex items-center gap-5">
-            {/* These are real anchors — won't silently do nothing */}
             <a
               href="#privacy"
               onClick={(e) => e.preventDefault()}
@@ -122,15 +130,18 @@ export const Footer = () => {
             >
               Terms of Service
             </a>
-            <Link
-              to="/admin"
-              className="hover:text-red-400 transition font-semibold"
-            >
-              Admin Portal
-            </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="hover:text-purple-400 transition font-semibold text-purple-500"
+              >
+                Admin Console
+              </Link>
+            )}
           </div>
         </div>
       </div>
     </footer>
   );
 };
+
