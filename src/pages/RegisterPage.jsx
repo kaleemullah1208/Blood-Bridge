@@ -117,7 +117,7 @@ export const RegisterPage = () => {
 
     try {
       setLoading(true);
-      await register(email, password, {
+      const { profile } = await register(email, password, {
         name,
         phone,
         bloodGroup,
@@ -126,8 +126,13 @@ export const RegisterPage = () => {
         role: role
       });
 
-      showSuccess(`Account registered as ${role === 'donor' ? 'Voluntary Blood Donor' : 'Patient / Seeker'}! Welcome.`);
-      navigate('/dashboard');
+      if (profile?.role === 'admin' || email.trim().toLowerCase() === 'admin@gmail.com') {
+        showSuccess('Administrator account registered! Welcome to the Admin Console.');
+        navigate('/admin');
+      } else {
+        showSuccess(`Account registered as ${role === 'donor' ? 'Voluntary Blood Donor' : 'Patient / Seeker'}! Welcome to your dashboard.`);
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error("Registration error:", err);
       showError(err.message || 'Registration failed. Please try again.');
@@ -139,9 +144,14 @@ export const RegisterPage = () => {
   const handleGoogleSignUp = async () => {
     try {
       setGoogleLoading(true);
-      await loginWithGoogle();
-      showSuccess("Signed up with Google successfully! Complete your profile.");
-      navigate('/dashboard');
+      const { user, profile } = await loginWithGoogle();
+      if (profile?.role === 'admin' || user?.email?.toLowerCase() === 'admin@gmail.com') {
+        showSuccess("Admin authorized via Google! Welcome to the Admin Console.");
+        navigate('/admin');
+      } else {
+        showSuccess(`Signed up with Google! Welcome to your dashboard, ${profile?.name || user?.displayName || 'Hero'}.`);
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error("Google sign up error:", err);
       if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
