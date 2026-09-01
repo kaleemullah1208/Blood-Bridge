@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, ADMIN_EMAIL, ADMIN_PASS } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { ShieldCheck, Lock, Mail, ArrowRight, Eye, EyeOff, AlertCircle, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, Eye, EyeOff, AlertCircle, Shield } from 'lucide-react';
 
 export const AdminLoginPage = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +19,7 @@ export const AdminLoginPage = () => {
   const validate = () => {
     const newErrors = {};
     if (!email || !email.trim()) {
-      newErrors.email = 'Admin Email is required';
+      newErrors.email = 'Staff Email is required';
     } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
@@ -28,7 +28,7 @@ export const AdminLoginPage = () => {
     }
 
     if (!password) {
-      newErrors.password = 'Admin Password is required';
+      newErrors.password = 'Password is required';
     }
     return newErrors;
   };
@@ -46,28 +46,23 @@ export const AdminLoginPage = () => {
     setErrors(validationResult);
 
     if (Object.keys(validationResult).length > 0) {
-      showWarning('Please fill in both admin email and password.');
+      showWarning('Please fill in both your staff email and password.');
       return;
     }
 
     try {
       setLoading(true);
-      await login(email, password);
+      const { profile } = await login(email, password, { requireAdmin: true });
 
-      const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      if (isAdmin) {
-        showSuccess('Admin authorized! Opening Admin Dashboard in a new tab...');
-        
-        // Open Admin Dashboard in a new browser tab
-        window.open('/admin', '_blank');
-        
-        // Also redirect current tab to Home / Dashboard
-        navigate('/', { replace: true });
+      const isAuthorizedAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() || profile?.role === 'admin';
+      if (isAuthorizedAdmin) {
+        showSuccess('Staff authentication verified! Welcome to the Admin Console.');
+        navigate('/admin', { replace: true });
       } else {
         showError('Access denied: Account does not have administrator privileges.');
       }
     } catch (err) {
-      console.error("Admin login error:", err);
+      console.error("Staff login error:", err);
       showError(err.message || 'Invalid administrator credentials.');
     } finally {
       setLoading(false);
@@ -78,25 +73,25 @@ export const AdminLoginPage = () => {
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-8 bg-white rounded-3xl p-8 sm:p-10 border border-slate-200 shadow-2xl relative overflow-hidden">
         {/* Top Accent Line */}
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 to-indigo-600" />
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-700 via-indigo-600 to-blue-600" />
 
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-purple-600 text-white shadow-lg shadow-purple-600/30 mb-2">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-600 text-white shadow-lg shadow-purple-600/30 mb-2">
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Administrator Portal
+            Staff & Administration Portal
           </h1>
-          <p className="text-xs text-slate-500">
-            Secure sign-in for BloodBridge system operations
+          <p className="text-xs text-slate-500 max-w-xs mx-auto">
+            Authorized access for BloodBridge clinical management and system administration.
           </p>
         </div>
 
-        {/* Notice */}
+        {/* Security Info Pill */}
         <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center gap-2">
-          <ExternalLink className="w-4 h-4 text-purple-600 flex-shrink-0" />
-          <span>On successful verification, the live Admin Dashboard will launch in a <strong>new browser tab</strong>.</span>
+          <Shield className="w-4 h-4 text-purple-600 flex-shrink-0" />
+          <span>Restricted portal. All administrative actions are logged and audited.</span>
         </div>
 
         {/* Login Form */}
@@ -104,7 +99,7 @@ export const AdminLoginPage = () => {
           {/* Email Address */}
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex justify-between">
-              <span>Admin Email *</span>
+              <span>Staff / Admin Email *</span>
               {touched.email && errors.email && (
                 <span className="text-red-500 text-xs normal-case font-semibold flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" /> {errors.email}
@@ -134,7 +129,7 @@ export const AdminLoginPage = () => {
           {/* Password */}
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex justify-between">
-              <span>Admin Password *</span>
+              <span>Password *</span>
               {touched.password && errors.password && (
                 <span className="text-red-500 text-xs normal-case font-semibold flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" /> {errors.password}
@@ -171,14 +166,15 @@ export const AdminLoginPage = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-lg shadow-purple-600/30 active:scale-98 transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-purple-600/30 active:scale-98 transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>Launch Admin Dashboard in New Tab</span>
-                <ExternalLink className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4" />
+                <span>Sign In to Admin Console</span>
+                <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
@@ -188,10 +184,11 @@ export const AdminLoginPage = () => {
         <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
           Return to{' '}
           <Link to="/" className="font-bold text-slate-800 hover:text-red-600 underline">
-            Standard User Portal
+            Community Home
           </Link>
         </div>
       </div>
     </div>
   );
 };
+

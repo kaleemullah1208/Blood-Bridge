@@ -17,7 +17,8 @@ import {
   ShieldCheck, 
   Crown,
   Lock,
-  UserPlus
+  UserPlus,
+  SlidersHorizontal
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -42,10 +43,10 @@ export const Navbar = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      showSuccess("Successfully logged out");
+      showSuccess("Successfully signed out.");
       navigate('/');
     } catch (err) {
-      showError(err.message || "Failed to log out");
+      showError(err.message || "Failed to sign out");
     }
   };
 
@@ -80,7 +81,7 @@ export const Navbar = () => {
                   <span className="text-xl font-extrabold tracking-tight text-red-600">Bridge</span>
                 </div>
                 <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 -mt-1">
-                  Emergency Hub
+                  Emergency Network
                 </p>
               </div>
             </Link>
@@ -99,18 +100,21 @@ export const Navbar = () => {
                 Post Request
               </NavLink>
 
-              {/* If Admin is already logged in, show direct launch button */}
+              {/* If Admin is logged in, show direct Admin Console link */}
               {isAdmin && (
-                <a 
-                  href="/admin" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all text-purple-700 bg-purple-50 hover:bg-purple-100"
+                <NavLink 
+                  to="/admin" 
+                  className={({ isActive }) =>
+                    `inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all ${
+                      isActive
+                        ? 'bg-purple-100 text-purple-800 ring-2 ring-purple-600/30'
+                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                    }`
+                  }
                 >
-                  <Crown className="w-4 h-4 text-purple-600" />
-                  <span>Admin Panel</span>
-                  <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-mono">NEW TAB</span>
-                </a>
+                  <ShieldCheck className="w-4 h-4 text-purple-600" />
+                  <span>Admin Console</span>
+                </NavLink>
               )}
             </nav>
 
@@ -128,16 +132,18 @@ export const Navbar = () => {
                 </Link>
               )}
 
-              {/* Dedicated Separate Admin Access Button */}
-              <button
-                type="button"
-                onClick={() => setShowAdminModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition shadow-2xs"
-                title="Admin Control Access"
-              >
-                <ShieldCheck className="w-4 h-4 text-purple-600" />
-                <span>Admin Access</span>
-              </button>
+              {/* Professional Staff & Admin Portal Button */}
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shadow-2xs"
+                  title="Authorized Staff & Administration Access"
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-600" />
+                  <span>Staff & Admin</span>
+                </button>
+              )}
 
               {currentUser ? (
                 <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
@@ -182,8 +188,8 @@ export const Navbar = () => {
               <button
                 type="button"
                 onClick={() => setShowAdminModal(true)}
-                className="p-2 rounded-xl text-slate-500 hover:text-purple-700 hover:bg-purple-50"
-                title="Admin Access"
+                className="p-2 rounded-xl text-slate-600 hover:text-purple-700 hover:bg-purple-50"
+                title="Staff Portal"
               >
                 <ShieldCheck className="w-5 h-5 text-purple-600" />
               </button>
@@ -229,21 +235,33 @@ export const Navbar = () => {
               Post Blood Request
             </NavLink>
 
-            {/* Admin trigger button for mobile */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                setShowAdminModal(true);
-              }}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-base font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
-            >
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-purple-600" />
-                <span>Admin Portal Login</span>
-              </div>
-              <span className="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded font-mono">POPUP</span>
-            </button>
+            {isAdmin && (
+              <NavLink
+                to="/admin"
+                onClick={() => setIsOpen(false)}
+                className={mobileNavLinkClass}
+              >
+                <Crown className="w-5 h-5 text-purple-600" />
+                Admin Console
+              </NavLink>
+            )}
+
+            {/* Staff portal trigger button for mobile */}
+            {!isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setShowAdminModal(true);
+                }}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-base font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-purple-600" />
+                  <span>Staff & Administration Portal</span>
+                </div>
+              </button>
+            )}
 
             <div className="pt-3 border-t border-slate-100 space-y-2">
               {currentUser ? (
@@ -290,7 +308,7 @@ export const Navbar = () => {
         )}
       </header>
 
-      {/* Admin Login Modal (opens Admin Dashboard in a new tab) */}
+      {/* Staff & Administration Login Modal */}
       <AdminLoginModal
         isOpen={showAdminModal}
         onClose={() => setShowAdminModal(false)}
@@ -298,3 +316,4 @@ export const Navbar = () => {
     </>
   );
 };
+

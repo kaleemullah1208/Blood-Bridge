@@ -167,10 +167,18 @@ export const AdminDashboardPage = () => {
 
   const formatUserTime = (dateVal) => {
     if (!dateVal) return 'Recently';
-    const date = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
-    if (isNaN(date.getTime())) return 'Recently';
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    if (typeof dateVal.toDate === 'function') {
+      try {
+        return dateVal.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      } catch { /* ignore */ }
+    }
+    const ms = typeof dateVal === 'number' ? dateVal : new Date(dateVal).getTime();
+    if (!isNaN(ms) && ms > 0) {
+      return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    return 'Recently';
   };
+
 
   // Filter calculations
   const filteredRequests = requests.filter(req => {

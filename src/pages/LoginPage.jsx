@@ -12,15 +12,13 @@ import {
   AlertCircle, 
   ShieldCheck, 
   User, 
-  ExternalLink,
   Crown,
   UserPlus,
-  HeartHandshake,
   Users
 } from 'lucide-react';
 
 export const LoginPage = () => {
-  // Mode switcher: 'user-donor' (Donor or Seeker) | 'admin' (Administrator)
+  // Mode switcher: 'user-donor' (Donor or Seeker) | 'admin' (Staff & Administration)
   const [authTab, setAuthTab] = useState('user-donor');
   // Selected user role for sign-in context: 'donor' | 'user'
   const [selectedRole, setSelectedRole] = useState('donor');
@@ -88,9 +86,8 @@ export const LoginPage = () => {
       });
 
       if (isLoggingInAsAdmin || profile?.role === 'admin') {
-        showSuccess('Admin verified! Opening Admin Dashboard in a new tab...');
-        window.open('/admin', '_blank');
-        navigate('/', { replace: true });
+        showSuccess('Staff authentication verified! Welcome to the Admin Console.');
+        navigate('/admin', { replace: true });
       } else {
         showSuccess(`Welcome back, ${profile?.name || 'Hero'}!`);
         const destination = location.state?.from?.pathname || '/dashboard';
@@ -98,12 +95,7 @@ export const LoginPage = () => {
       }
     } catch (err) {
       console.error("Login submission error:", err);
-      if (err.code === 'USER_NOT_REGISTERED' || err.message?.includes('Account not found')) {
-        setAccountNotFoundError(true);
-        showWarning("No account found! Please Sign Up first to create your account.");
-      } else {
-        showError(err.message || 'Failed to sign in. Please verify your credentials.');
-      }
+      showError(err.message || 'Failed to sign in. Please verify your credentials.');
     } finally {
       setLoading(false);
     }
@@ -117,9 +109,8 @@ export const LoginPage = () => {
       const { user, profile } = await loginWithGoogle();
 
       if (profile?.role === 'admin' || user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        showSuccess('Admin authorized via Google! Opening Admin Dashboard in a new tab...');
-        window.open('/admin', '_blank');
-        navigate('/', { replace: true });
+        showSuccess('Admin authorized via Google! Welcome to the Admin Console.');
+        navigate('/admin', { replace: true });
       } else {
         showSuccess(`Signed in with Google! Welcome ${profile?.name || user?.displayName || 'Hero'}.`);
         const destination = location.state?.from?.pathname || '/dashboard';
@@ -141,11 +132,11 @@ export const LoginPage = () => {
         {/* Accent Bar */}
         <div className={`absolute top-0 inset-x-0 h-1.5 transition-colors duration-300 ${
           authTab === 'admin' 
-            ? 'bg-gradient-to-r from-purple-600 to-indigo-600' 
+            ? 'bg-gradient-to-r from-purple-700 via-indigo-600 to-blue-600' 
             : 'bg-gradient-to-r from-red-600 to-rose-500'
         }`} />
 
-        {/* Top Tab Switcher: General Sign In vs Dedicated Admin Portal */}
+        {/* Top Tab Switcher */}
         <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold">
           <button
             type="button"
@@ -160,7 +151,7 @@ export const LoginPage = () => {
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Donor & User Sign In</span>
+            <span>Donor & User</span>
           </button>
 
           <button
@@ -171,12 +162,12 @@ export const LoginPage = () => {
             }}
             className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
               authTab === 'admin'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-purple-600'
+                ? 'bg-purple-700 text-white shadow-sm'
+                : 'text-slate-600 hover:text-purple-700'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Admin Portal</span>
+            <span>Staff & Admin</span>
           </button>
         </div>
 
@@ -184,17 +175,17 @@ export const LoginPage = () => {
         <div className="text-center space-y-1.5">
           <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl text-white shadow-md mb-1 transition-all ${
             authTab === 'admin'
-              ? 'bg-purple-600 shadow-purple-600/30'
+              ? 'bg-gradient-to-tr from-purple-700 to-indigo-600 shadow-purple-600/30'
               : 'bg-gradient-to-tr from-red-600 to-rose-500 shadow-red-500/25'
           }`}>
             {authTab === 'admin' ? (
-              <Crown className="w-7 h-7" />
+              <ShieldCheck className="w-7 h-7" />
             ) : (
               <Droplet className="w-7 h-7 fill-current" />
             )}
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            {authTab === 'admin' ? 'Administrator Login' : 'Sign In to Your Account'}
+            {authTab === 'admin' ? 'Staff & Administration Sign In' : 'Sign In to BloodBridge'}
           </h1>
           <p className="text-xs text-slate-500">
             {authTab === 'admin' 
@@ -239,12 +230,12 @@ export const LoginPage = () => {
           </div>
         )}
 
-        {/* Account Not Found Alert Banner with 1-Click Sign Up */}
+        {/* Account Not Found Alert Banner */}
         {accountNotFoundError && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2 animate-fade-in">
             <div className="flex items-start gap-2.5 font-bold">
               <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <span>Account Not Found: You haven't registered with this email yet.</span>
+              <span>No account registered with this email yet.</span>
             </div>
             <p className="text-amber-800 text-[11px] pl-6.5">
               Please create an account first to join as a Voluntary Blood Donor or Patient Seeker.
@@ -303,7 +294,7 @@ export const LoginPage = () => {
           {/* Email Address */}
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex justify-between">
-              <span>{authTab === 'admin' ? 'Admin Email *' : 'Email Address *'}</span>
+              <span>{authTab === 'admin' ? 'Staff / Admin Email *' : 'Email Address *'}</span>
               {touched.email && errors.email && (
                 <span className="text-red-500 text-xs normal-case font-semibold flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" /> {errors.email}
@@ -381,7 +372,7 @@ export const LoginPage = () => {
             disabled={loading}
             className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md active:scale-98 transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50 ${
               authTab === 'admin'
-                ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/30'
+                ? 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 shadow-purple-600/30'
                 : 'bg-red-600 hover:bg-red-700 shadow-red-600/25'
             }`}
           >
@@ -391,10 +382,10 @@ export const LoginPage = () => {
               <>
                 <span>
                   {authTab === 'admin' 
-                    ? 'Authorize & Open Admin Dashboard' 
+                    ? 'Sign In to Admin Console' 
                     : `Sign In as ${selectedRole === 'donor' ? 'Donor' : 'User'}`}
                 </span>
-                {authTab === 'admin' ? <ExternalLink className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
@@ -430,3 +421,4 @@ export const LoginPage = () => {
     </div>
   );
 };
+

@@ -123,6 +123,24 @@ const getStoredDemoDonors = () => {
 };
 
 /**
+ * Safe helper to parse Firestore Timestamps, ISO strings, or Date objects
+ */
+export const getTimestampMillis = (val) => {
+  if (!val) return 0;
+  if (typeof val.toDate === 'function') {
+    try { return val.toDate().getTime(); } catch { /* ignore */ }
+  }
+  if (typeof val.toMillis === 'function') {
+    try { return val.toMillis(); } catch { /* ignore */ }
+  }
+  if (val.seconds !== undefined) {
+    return val.seconds * 1000;
+  }
+  const parsed = new Date(val).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+/**
  * Real-time listener for active blood requests (for public feed)
  */
 export const subscribeToActiveBloodRequests = (callback, onError) => {
@@ -140,15 +158,11 @@ export const subscribeToActiveBloodRequests = (callback, onError) => {
 
     return onSnapshot(q, (snapshot) => {
       const requests = [];
-      snapshot.forEach((doc) => {
-        requests.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        requests.push({ id: docSnap.id, ...docSnap.data() });
       });
       // Sort newest first
-      requests.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-        return timeB - timeA;
-      });
+      requests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(requests);
     }, (error) => {
       console.warn("Firestore active requests fallback:", error.message);
@@ -175,14 +189,10 @@ export const subscribeToAllBloodRequests = (callback) => {
     const q = query(collection(db, REQUESTS_COLLECTION));
     return onSnapshot(q, (snapshot) => {
       const requests = [];
-      snapshot.forEach((doc) => {
-        requests.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        requests.push({ id: docSnap.id, ...docSnap.data() });
       });
-      requests.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-        return timeB - timeA;
-      });
+      requests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(requests);
     }, (error) => {
       console.warn("Firestore all requests fallback:", error.message);
@@ -218,14 +228,10 @@ export const subscribeToUserRequests = (userId, callback) => {
 
     return onSnapshot(q, (snapshot) => {
       const userRequests = [];
-      snapshot.forEach((doc) => {
-        userRequests.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        userRequests.push({ id: docSnap.id, ...docSnap.data() });
       });
-      userRequests.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-        return timeB - timeA;
-      });
+      userRequests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(userRequests);
     }, (err) => {
       console.warn("User requests subscription fallback:", err.message);
@@ -266,8 +272,9 @@ export const createBloodRequest = async (requestData) => {
     notes: requestData.notes ? requestData.notes.trim() : '',
     status: 'Active',
     createdBy: requestData.createdBy,
-    createdByName: requestData.createdByName || 'Anonymous Seeker',
-    createdAt: serverTimestamp()
+    createdByName: requestData.createdByName || 'Emergency Seeker',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   };
 
   const docRef = await addDoc(collection(db, REQUESTS_COLLECTION), payload);
@@ -308,7 +315,7 @@ export const deleteBloodRequest = async (requestId) => {
 };
 
 /**
- * Subscribe to Donors (Users with isDonor = true) in Real-Time
+ * Subscribe to Donors (Users with isDonor = true or role = 'donor') in Real-Time
  */
 export const subscribeToDonors = (callback) => {
   if (!isFirebaseConfigured) {
@@ -317,17 +324,26 @@ export const subscribeToDonors = (callback) => {
   }
 
   try {
-    const q = query(
-      collection(db, USERS_COLLECTION),
-      where('isDonor', '==', true)
-    );
+    const q = query(collection(db, USERS_COLLECTION));
 
     return onSnapshot(q, (snapshot) => {
       const donors = [];
-      snapshot.forEach((doc) => {
-        donors.push({ id: doc.id, uid: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const isDonorUser = data.isDonor === true || data.role === 'donor';
+        if (isDonorUser) {
+          donors.push({ 
+            id: docSnap.id, 
+            uid: docSnap.id, 
+            ...data,
+            isDonor: true,
+            isAvailable: data.isAvailable !== undefined ? data.isAvailable : true
+          });
+        }
       });
-      // Return real Firestore users
+
+      // Sort newest registered first
+      donors.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(donors);
     }, (err) => {
       console.warn("Firestore donor listener fallback:", err.message);
@@ -354,16 +370,12 @@ export const subscribeToAllUsers = (callback) => {
     const q = query(collection(db, USERS_COLLECTION));
     return onSnapshot(q, (snapshot) => {
       const users = [];
-      snapshot.forEach((doc) => {
-        users.push({ id: doc.id, uid: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        users.push({ id: docSnap.id, uid: docSnap.id, ...docSnap.data() });
       });
       
       // Sort users by most recently registered first
-      users.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-        return timeB - timeA;
-      });
+      users.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
 
       callback(users);
     }, (err) => {
@@ -408,13 +420,12 @@ export const setUserProfileDoc = async (uid, userData) => {
     bloodGroup: userData.bloodGroup || 'O+',
     city: userData.city || '',
     hospitalName: userData.hospitalName || '',
-    isDonor: userData.isDonor !== undefined ? userData.isDonor : true,
+    isDonor: userData.isDonor !== undefined ? userData.isDonor : (userData.role === 'donor'),
     isAvailable: userData.isAvailable !== undefined ? userData.isAvailable : true,
     isVerified: userData.isVerified || false,
     role: userData.role || 'donor',
     provider: userData.provider || 'email',
-    updatedAt: serverTimestamp(),
-    createdAt: userData.createdAt || serverTimestamp()
+    updatedAt: serverTimestamp()
   }, { merge: true });
 };
 
@@ -467,3 +478,4 @@ export const adminDeleteUser = async (uid) => {
     await deleteDoc(docRef);
   }
 };
+

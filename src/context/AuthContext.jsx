@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -23,11 +23,44 @@ export const ADMIN_EMAIL = 'admin@gmail.com';
 export const ADMIN_PASS = 'admin123';
 const LOCAL_STORAGE_SESSION_KEY = 'bloodbridge_active_session';
 
+// Helper to sanitize Firebase Auth error messages into friendly messages
+export const getFriendlyAuthErrorMessage = (error) => {
+  if (!error) return 'An unexpected error occurred. Please try again.';
+  const code = error.code || '';
+  
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'This email address is already registered. Please sign in instead.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Password is too weak. Please use at least 6 characters.';
+    case 'auth/wrong-password':
+      return 'Incorrect password. Please verify your credentials or sign in with Google.';
+    case 'auth/user-not-found':
+      return 'No account found with this email address. Please sign up first.';
+    case 'auth/invalid-credential':
+      return 'Invalid email or password. Please verify your login credentials.';
+    case 'auth/too-many-requests':
+      return 'Too many failed login attempts. Please wait a few moments before trying again.';
+    case 'auth/network-request-failed':
+      return 'Network connection error. Please check your internet connection and try again.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return null; // Silent cancellation
+    default:
+      return error.message || 'Authentication failed. Please check your details.';
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+
+  // Track if a manual registration or login is in-flight to prevent onAuthStateChanged overwriting
+  const isRegisteringRef = useRef(false);
 
   // Synchronize Auth State & Real-time Firestore user profile
   useEffect(() => {
@@ -70,9 +103,22 @@ export const AuthProvider = ({ children }) => {
               photoURL: firebaseUser.photoURL || '',
               role: profile.role
             });
-            localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(profile));
-          } else {
-            // Create default user profile in Firestore if it doesn't exist
+
+            // Save clean session
+            try {
+              const sessionData = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                name: profile.name,
+                role: profile.role,
+                isDonor: profile.isDonor,
+                bloodGroup: profile.bloodGroup,
+                city: profile.city
+              };
+              localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(sessionData));
+            } catch { /* ignore */ }
+          } else if (!isRegisteringRef.current) {
+            // Only create fallback document if not currently in manual registration flow
             const initialProfile = {
               uid: firebaseUser.uid,
               id: firebaseUser.uid,
@@ -88,8 +134,8 @@ export const AuthProvider = ({ children }) => {
               isVerified: false,
               lastDonationDate: '',
               provider: firebaseUser.providerData?.[0]?.providerId || 'google',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
             };
 
             try {
@@ -114,7 +160,7 @@ export const AuthProvider = ({ children }) => {
         });
       } else {
         if (unsubscribeProfile) unsubscribeProfile();
-        // Check for mock admin session
+        // Check for stored admin session
         const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
         if (stored) {
           try {
@@ -146,57 +192,75 @@ export const AuthProvider = ({ children }) => {
     const assignedRole = isAdmin ? 'admin' : role;
     const isDonor = assignedRole === 'donor';
 
+    isRegisteringRef.current = true;
     let uid = 'usr-' + Date.now();
     let firebaseUser = null;
 
-    if (isFirebaseConfigured) {
-      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-      firebaseUser = userCredential.user;
-      uid = firebaseUser.uid;
+    try {
+      if (isFirebaseConfigured) {
+        const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+        firebaseUser = userCredential.user;
+        uid = firebaseUser.uid;
 
-      try {
-        await updateProfile(firebaseUser, { displayName: name.trim() });
-      } catch (e) {
-        console.warn("Could not update display name:", e);
+        try {
+          await updateProfile(firebaseUser, { displayName: name.trim() });
+        } catch (e) {
+          console.warn("Could not update display name:", e);
+        }
       }
+
+      const isoNow = new Date().toISOString();
+      const newProfile = {
+        uid,
+        id: uid,
+        name: name.trim(),
+        email: trimmedEmail,
+        phone: phone.trim(),
+        bloodGroup: bloodGroup || 'O+',
+        city: city.trim(),
+        hospitalName: hospitalName ? hospitalName.trim() : '',
+        role: assignedRole,
+        isDonor: isDonor,
+        isAvailable: isDonor,
+        isVerified: false,
+        lastDonationDate: '',
+        provider: 'email',
+        createdAt: isoNow,
+        updatedAt: isoNow
+      };
+
+      if (isFirebaseConfigured) {
+        const userDocRef = doc(db, 'users', uid);
+        await setDoc(userDocRef, {
+          ...newProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+
+      const authUser = {
+        uid,
+        email: trimmedEmail,
+        displayName: name.trim(),
+        role: assignedRole
+      };
+
+      setCurrentUser(authUser);
+      setUserProfile(newProfile);
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(newProfile));
+
+      return { user: authUser, profile: newProfile };
+    } catch (err) {
+      console.error("Auth register error:", err);
+      const friendlyMsg = getFriendlyAuthErrorMessage(err);
+      const errorObj = new Error(friendlyMsg || 'Registration failed');
+      errorObj.code = err.code;
+      throw errorObj;
+    } finally {
+      setTimeout(() => {
+        isRegisteringRef.current = false;
+      }, 1000);
     }
-
-    const newProfile = {
-      uid,
-      id: uid,
-      name: name.trim(),
-      email: trimmedEmail,
-      phone: phone.trim(),
-      bloodGroup: bloodGroup || 'O+',
-      city: city.trim(),
-      hospitalName: hospitalName ? hospitalName.trim() : '',
-      role: assignedRole,
-      isDonor: isDonor,
-      isAvailable: isDonor,
-      isVerified: false,
-      lastDonationDate: '',
-      provider: 'email',
-      createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
-      updatedAt: serverTimestamp ? serverTimestamp() : new Date().toISOString()
-    };
-
-    if (isFirebaseConfigured) {
-      const userDocRef = doc(db, 'users', uid);
-      await setDoc(userDocRef, newProfile, { merge: true });
-    }
-
-    const authUser = {
-      uid,
-      email: trimmedEmail,
-      displayName: name.trim(),
-      role: assignedRole
-    };
-
-    setCurrentUser(authUser);
-    setUserProfile(newProfile);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(newProfile));
-
-    return { user: authUser, profile: newProfile };
   };
 
   // 2. Google 1-Click Sign In / Sign Up
@@ -205,66 +269,75 @@ export const AuthProvider = ({ children }) => {
       throw new Error("Firebase is not configured for Google Sign-In.");
     }
 
-    // Trigger Google Auth Popup
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-    const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-    // Query or create user document in Cloud Firestore
-    const userDocRef = doc(db, 'users', user.uid);
-    const docSnap = await getDoc(userDocRef);
+      const userDocRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userDocRef);
 
-    let profile;
-    if (docSnap.exists()) {
-      const existingData = docSnap.data();
-      profile = {
+      let profile;
+      if (docSnap.exists()) {
+        const existingData = docSnap.data();
+        profile = {
+          uid: user.uid,
+          id: user.uid,
+          ...existingData,
+          role: isAdmin ? 'admin' : (existingData.role || 'user'),
+          isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor')
+        };
+        await setDoc(userDocRef, { updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+      } else {
+        const isoNow = new Date().toISOString();
+        profile = {
+          uid: user.uid,
+          id: user.uid,
+          name: user.displayName || user.email?.split('@')[0] || 'Member',
+          email: user.email,
+          phone: user.phoneNumber || '',
+          bloodGroup: 'O+',
+          city: '',
+          hospitalName: '',
+          role: isAdmin ? 'admin' : 'user',
+          isDonor: false,
+          isAvailable: false,
+          isVerified: false,
+          lastDonationDate: '',
+          provider: 'google',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+        await setDoc(userDocRef, profile, { merge: true });
+        setShowOnboardingModal(true);
+      }
+
+      const activeUser = {
         uid: user.uid,
-        id: user.uid,
-        ...existingData,
-        role: isAdmin ? 'admin' : (existingData.role || 'user'),
-        isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor')
-      };
-      await setDoc(userDocRef, { updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
-    } else {
-      // New user from Google
-      profile = {
-        uid: user.uid,
-        id: user.uid,
-        name: user.displayName || user.email?.split('@')[0] || 'Member',
         email: user.email,
-        phone: user.phoneNumber || '',
-        bloodGroup: 'O+',
-        city: '',
-        hospitalName: '',
-        role: isAdmin ? 'admin' : 'user',
-        isDonor: false,
-        isAvailable: false,
-        isVerified: false,
-        lastDonationDate: '',
-        provider: 'google',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        displayName: profile.name || user.displayName,
+        photoURL: user.photoURL || '',
+        role: profile.role
       };
-      await setDoc(userDocRef, profile, { merge: true });
-      setShowOnboardingModal(true);
+
+      setCurrentUser(activeUser);
+      setUserProfile(profile);
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(profile));
+
+      return { user: activeUser, profile };
+    } catch (err) {
+      console.error("Auth google login error:", err);
+      const friendlyMsg = getFriendlyAuthErrorMessage(err);
+      if (friendlyMsg) {
+        const errorObj = new Error(friendlyMsg);
+        errorObj.code = err.code;
+        throw errorObj;
+      }
+      throw err;
     }
-
-    const activeUser = {
-      uid: user.uid,
-      email: user.email,
-      displayName: profile.name || user.displayName,
-      photoURL: user.photoURL || '',
-      role: profile.role
-    };
-
-    setCurrentUser(activeUser);
-    setUserProfile(profile);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(profile));
-
-    return { user: activeUser, profile };
   };
 
-  // 3. Email & Password Login (Enhanced error handling for non-registered users)
+  // 3. Email & Password Login
   const login = async (email, password, { requireAdmin = false, selectedRole = null } = {}) => {
     const trimmedEmail = email.trim().toLowerCase();
     const isAdminCredentials = trimmedEmail === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASS;
@@ -304,11 +377,9 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      // Standard Firebase Auth sign in
       const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
-      // Fetch user Firestore profile
       const userDocRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(userDocRef);
 
@@ -332,13 +403,12 @@ export const AuthProvider = ({ children }) => {
         await setDoc(userDocRef, { ...profile, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
       }
 
-      // If logging in from the Admin tab, verify admin privileges
       if (requireAdmin && profile.role !== 'admin' && trimmedEmail !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
         setCurrentUser(null);
         setUserProfile(null);
         localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-        throw new Error("Access Denied: You do not have administrator privileges.");
+        throw new Error("Access Denied: Account does not have administrator privileges.");
       }
 
       const activeUser = {
@@ -354,24 +424,11 @@ export const AuthProvider = ({ children }) => {
 
       return { user: activeUser, profile };
     } catch (error) {
-      console.error("Firebase Login Error Code:", error.code, error.message);
-      
-      // Friendly message when account doesn't exist
-      if (
-        error.code === 'auth/user-not-found' || 
-        error.code === 'auth/invalid-credential' ||
-        error.code === 'auth/invalid-email'
-      ) {
-        const notFoundErr = new Error("Account not found! You do not have an account registered with this email yet. Please Sign Up first to create your account.");
-        notFoundErr.code = 'USER_NOT_REGISTERED';
-        throw notFoundErr;
-      } else if (error.code === 'auth/wrong-password') {
-        throw new Error("Incorrect password. Please verify your password or sign in with Google.");
-      } else if (error.code === 'auth/too-many-requests') {
-        throw new Error("Too many failed login attempts. Please wait a few moments or reset your password.");
-      } else {
-        throw error;
-      }
+      console.error("Firebase Login Error:", error.code, error.message);
+      const friendlyMsg = getFriendlyAuthErrorMessage(error);
+      const errObj = new Error(friendlyMsg || 'Invalid email or password.');
+      errObj.code = error.code;
+      throw errObj;
     }
   };
 
@@ -474,3 +531,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

@@ -84,7 +84,7 @@ export const Footer = () => {
             <span className="hover:text-slate-400 transition cursor-pointer">Privacy Policy</span>
             <span className="hover:text-slate-400 transition cursor-pointer">Terms of Service</span>
             <Link to="/admin" className="text-slate-400 hover:text-red-400 transition">
-              Admin Portal
+              Staff & Administration
             </Link>
           </div>
         </div>

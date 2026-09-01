@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, ADMIN_EMAIL } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { ShieldCheck, Lock, Mail, Eye, EyeOff, AlertCircle, X, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, Eye, EyeOff, AlertCircle, X, ArrowRight, Shield } from 'lucide-react';
 
 export const AdminLoginModal = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
 
   const { login } = useAuth();
   const { showSuccess, showError, showWarning } = useToast();
+  const navigate = useNavigate();
 
   if (!isOpen) return null;
 
@@ -20,29 +22,28 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
     setError('');
 
     if (!email.trim() || !password) {
-      setError('Please enter both admin email and password.');
-      showWarning('Please enter both admin email and password.');
+      setError('Please provide your staff email and password.');
+      showWarning('Please enter your staff email and password.');
       return;
     }
 
     try {
       setLoading(true);
-      await login(email.trim(), password);
+      const { profile } = await login(email.trim(), password, { requireAdmin: true });
 
-      const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      if (isAdmin) {
-        showSuccess('Administrator verified! Opening Admin Control Hub in a new tab...');
-        // Open Admin Dashboard in a new tab
-        window.open('/admin', '_blank');
+      const isAuthorizedAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() || profile?.role === 'admin';
+      if (isAuthorizedAdmin) {
+        showSuccess('Staff authentication verified! Accessing Administration Console...');
         onClose();
         setEmail('');
         setPassword('');
+        navigate('/admin');
       } else {
         setError('Access denied: Account does not have administrator privileges.');
         showError('Access denied: Account does not have administrator privileges.');
       }
     } catch (err) {
-      console.error('Admin modal login error:', err);
+      console.error('Staff portal login error:', err);
       setError(err.message || 'Invalid administrator credentials.');
       showError(err.message || 'Invalid administrator credentials.');
     } finally {
@@ -51,10 +52,10 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative overflow-hidden">
-        {/* Top Gradient Accent */}
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 via-red-600 to-indigo-600" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fade-in">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200/80 relative overflow-hidden">
+        {/* Top Professional Indigo/Purple Gradient Accent */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600" />
 
         {/* Close Button */}
         <button
@@ -67,14 +68,14 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
 
         {/* Header */}
         <div className="text-center space-y-2 mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-purple-600 text-white shadow-lg shadow-purple-600/30 mb-1">
-            <ShieldCheck className="w-8 h-8" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-600 text-white shadow-lg shadow-purple-600/25 mb-1">
+            <ShieldCheck className="w-7 h-7" />
           </div>
           <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-            Administrator Access
+            Staff & Administration Portal
           </h3>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            Authorized personnel login. The live management dashboard will launch in a <strong>new browser tab</strong>.
+          <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+            Secure portal for hospital coordinators, emergency operators, and system administrators.
           </p>
         </div>
 
@@ -91,7 +92,7 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
           {/* Email */}
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Admin Email Address *
+              Staff / Admin Email *
             </label>
             <div className="relative">
               <input
@@ -109,7 +110,7 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
           {/* Password */}
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Admin Password *
+              Password *
             </label>
             <div className="relative">
               <input
@@ -135,20 +136,27 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-lg shadow-purple-600/30 active:scale-98 transition flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-purple-600/25 active:scale-98 transition flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
           >
             {loading ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4" />
-                <span>Launch Admin Dashboard in New Tab</span>
-                <ExternalLink className="w-4 h-4" />
+                <span>Sign In to Admin Console</span>
+                <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
+
+        {/* Security Footer Notice */}
+        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
+          <Shield className="w-3.5 h-3.5 text-purple-600" />
+          <span>256-Bit Encrypted Administrative Session</span>
+        </div>
       </div>
     </div>
   );
 };
+
