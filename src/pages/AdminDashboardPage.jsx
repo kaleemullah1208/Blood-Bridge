@@ -62,6 +62,7 @@ export const AdminDashboardPage = () => {
   // Filters for Users
   const [userSearch, setUserSearch] = useState('');
   const [userBloodGroupFilter, setUserBloodGroupFilter] = useState('All');
+  const [userRoleFilter, setUserRoleFilter] = useState('All'); // 'All' | 'donor' | 'user' | 'admin'
 
   // Real-time subscriptions to Firestore collections
   useEffect(() => {
@@ -84,7 +85,6 @@ export const AdminDashboardPage = () => {
   const refreshUnsub = useRef(null);
 
   const handleManualRefresh = () => {
-    // Cancel any previous manual-refresh listener to prevent memory leaks
     if (refreshUnsub.current && typeof refreshUnsub.current === 'function') {
       refreshUnsub.current();
     }
@@ -92,7 +92,7 @@ export const AdminDashboardPage = () => {
     const unsub = subscribeToAllUsers((data) => {
       setUsers(data);
       setRefreshing(false);
-      showInfo("Realtime user database synchronized.");
+      showInfo("Realtime user database synchronized with Firebase.");
     });
     refreshUnsub.current = unsub;
   };
@@ -102,10 +102,10 @@ export const AdminDashboardPage = () => {
     e.preventDefault();
     try {
       setLoggingInAdmin(true);
-      await login(adminEmail, adminPassword);
+      await login(adminEmail, adminPassword, { requireAdmin: true });
       showSuccess("Admin session unlocked successfully!");
     } catch (err) {
-      showError("Invalid admin credentials.");
+      showError(err.message || "Invalid admin credentials.");
     } finally {
       setLoggingInAdmin(false);
     }
@@ -117,7 +117,7 @@ export const AdminDashboardPage = () => {
       await updateBloodRequestStatus(requestId, newStatus);
       showSuccess(`Request status updated to "${newStatus}"`);
     } catch (err) {
-      showError("Failed to update status.");
+      showError("Failed to update status in Firebase.");
     }
   };
 
@@ -125,7 +125,7 @@ export const AdminDashboardPage = () => {
     if (!window.confirm("Admin Action: Are you sure you want to permanently delete this blood request?")) return;
     try {
       await deleteBloodRequest(requestId);
-      showSuccess("Blood request deleted successfully.");
+      showSuccess("Blood request deleted successfully from Firebase.");
     } catch (err) {
       showError("Failed to delete request.");
     }
@@ -136,9 +136,9 @@ export const AdminDashboardPage = () => {
     try {
       const newStatus = !user.isAvailable;
       await adminUpdateUser(user.uid || user.id, { isAvailable: newStatus });
-      showSuccess(`Donor availability set to ${newStatus ? 'Available' : 'Busy'}`);
+      showSuccess(`${user.name || 'Donor'} availability set to ${newStatus ? 'Available' : 'Busy'}`);
     } catch (err) {
-      showError("Failed to update availability.");
+      showError("Failed to update availability in Firebase.");
     }
   };
 
@@ -146,30 +146,33 @@ export const AdminDashboardPage = () => {
     try {
       const newStatus = !user.isVerified;
       await adminUpdateUser(user.uid || user.id, { isVerified: newStatus });
-      showSuccess(`Donor verification set to ${newStatus ? 'Verified' : 'Unverified'}`);
+      showSuccess(`${user.name || 'Donor'} verification set to ${newStatus ? 'Verified' : 'Unverified'}`);
     } catch (err) {
-      showError("Failed to update verification.");
+      showError("Failed to update verification in Firebase.");
     }
   };
 
   const handleToggleRole = async (user) => {
     const newRole = user.role === 'admin' ? 'donor' : 'admin';
-    if (!window.confirm(`Change role of ${user.name || 'user'} to "${newRole}"?`)) return;
+    if (!window.confirm(`Change role of "${user.name || user.email}" to "${newRole}"?`)) return;
     try {
-      await adminUpdateUser(user.uid || user.id, { role: newRole });
+      await adminUpdateUser(user.uid || user.id, { 
+        role: newRole,
+        isDonor: newRole === 'donor'
+      });
       showSuccess(`User role changed to ${newRole}`);
     } catch (err) {
-      showError("Failed to update role.");
+      showError("Failed to update role in Firebase.");
     }
   };
 
   const handleDeleteUser = async (user) => {
-    if (!window.confirm(`Admin Action: Permanently delete user profile for "${user.name || user.email}"?`)) return;
+    if (!window.confirm(`Admin Action: Permanently delete account for "${user.name || user.email}" from Firebase?`)) return;
     try {
       await adminDeleteUser(user.uid || user.id);
-      showSuccess("User profile deleted.");
+      showSuccess("User account deleted from database.");
     } catch (err) {
-      showError("Failed to delete user.");
+      showError("Failed to delete user in Firebase.");
     }
   };
 
@@ -186,7 +189,6 @@ export const AdminDashboardPage = () => {
     }
     return 'Recently';
   };
-
 
   // Filter calculations
   const filteredRequests = requests.filter(req => {
@@ -206,6 +208,11 @@ export const AdminDashboardPage = () => {
   });
 
   const filteredUsers = users.filter(u => {
+    if (userRoleFilter !== 'All') {
+      if (userRoleFilter === 'donor' && !(u.isDonor || u.role === 'donor')) return false;
+      if (userRoleFilter === 'user' && (u.isDonor || u.role === 'donor' || u.role === 'admin')) return false;
+      if (userRoleFilter === 'admin' && u.role !== 'admin') return false;
+    }
     if (userBloodGroupFilter !== 'All' && u.bloodGroup !== userBloodGroupFilter) return false;
     if (userSearch.trim()) {
       const term = userSearch.toLowerCase();
@@ -213,20 +220,24 @@ export const AdminDashboardPage = () => {
       const email = (u.email || '').toLowerCase();
       const city = (u.city || '').toLowerCase();
       const phone = (u.phone || '').toLowerCase();
-      if (!name.includes(term) && !email.includes(term) && !city.includes(term) && !phone.includes(term)) {
+      const hospital = (u.hospitalName || '').toLowerCase();
+      if (!name.includes(term) && !email.includes(term) && !city.includes(term) && !phone.includes(term) && !hospital.includes(term)) {
         return false;
       }
     }
     return true;
   });
 
-  // KPI calculations
+  // Dynamic Live KPIs
   const totalRequests = requests.length;
   const activeRequests = requests.filter(r => r.status === 'Active').length;
   const fulfilledRequests = requests.filter(r => r.status === 'Fulfilled').length;
   const criticalRequests = requests.filter(r => r.urgencyLevel === 'Critical' && r.status === 'Active').length;
-  const totalDonors = users.filter(u => u.isDonor).length;
-  const availableDonors = users.filter(u => u.isDonor && u.isAvailable).length;
+  
+  const totalDonors = users.filter(u => u.isDonor || u.role === 'donor').length;
+  const availableDonors = users.filter(u => (u.isDonor || u.role === 'donor') && u.isAvailable).length;
+  const totalSeekers = users.filter(u => !u.isDonor && u.role !== 'donor' && u.role !== 'admin').length;
+  const totalAdmins = users.filter(u => u.role === 'admin').length;
 
   // If user is not logged in as Admin, show Authorization Lock Screen
   if (!isAdmin) {
@@ -277,7 +288,7 @@ export const AdminDashboardPage = () => {
                   setAdminEmail(ADMIN_EMAIL);
                   setAdminPassword(ADMIN_PASS);
                 }}
-                className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition flex items-center gap-1"
+                className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition flex items-center gap-1 cursor-pointer"
               >
                 <KeyRound className="w-3 h-3 text-purple-600" />
                 <span>Fill Demo Credentials</span>
@@ -326,14 +337,14 @@ export const AdminDashboardPage = () => {
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
                 <Radio className="w-3.5 h-3.5 animate-ping text-emerald-400" />
-                <span>Real-Time Network Sync Active</span>
+                <span>Firebase Live Sync Active ({users.length} Users Connected)</span>
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
               Clinical & Operations Control Center
             </h1>
             <p className="text-slate-400 text-sm max-w-xl">
-              Central management dashboard for verified voluntary donors, hospital emergency transfusion broadcasts, and community accounts.
+              Real-time Firestore sync with all registered voluntary donors, hospital emergency transfusion broadcasts, and community members.
             </p>
           </div>
 
@@ -341,11 +352,11 @@ export const AdminDashboardPage = () => {
             <button
               onClick={handleManualRefresh}
               disabled={refreshing}
-              className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-bold flex items-center gap-2 transition"
+              className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-bold flex items-center gap-2 transition cursor-pointer"
               title="Force Refresh Data"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sync Data</span>
+              <span className="hidden sm:inline">Sync Firebase</span>
             </button>
 
             <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-3.5 rounded-2xl">
@@ -363,62 +374,61 @@ export const AdminDashboardPage = () => {
         </div>
       </div>
 
-
       {/* KPI Stats Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Registered Accounts</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Users</p>
             <h3 className="text-3xl font-black text-slate-900 mt-1">{users.length}</h3>
-            <p className="text-xs text-emerald-600 font-semibold mt-1">{availableDonors} Available Donors</p>
+            <p className="text-xs text-emerald-600 font-bold mt-1">{availableDonors} Available Donors</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Requests</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Requests</p>
             <h3 className="text-3xl font-black text-red-600 mt-1">{activeRequests}</h3>
-            <p className="text-xs text-slate-400 mt-1">{criticalRequests} Critical Urgency</p>
+            <p className="text-xs text-slate-400 font-semibold mt-1">{criticalRequests} Critical Urgency</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-red-50 text-red-600 border border-red-100">
             <Activity className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Fulfilled Emergencies</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Fulfilled Transfusions</p>
             <h3 className="text-3xl font-black text-emerald-600 mt-1">{fulfilledRequests}</h3>
-            <p className="text-xs text-slate-400 mt-1">From {totalRequests} total requests</p>
+            <p className="text-xs text-slate-400 font-semibold mt-1">From {totalRequests} total requests</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100">
             <HeartHandshake className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Critical Alerts</p>
-            <h3 className="text-3xl font-black text-amber-600 mt-1">{criticalRequests}</h3>
-            <p className="text-xs text-slate-400 mt-1">Requiring immediate match</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Voluntary Donors</p>
+            <h3 className="text-3xl font-black text-purple-600 mt-1">{totalDonors}</h3>
+            <p className="text-xs text-slate-400 font-semibold mt-1">{totalSeekers} Patient Requesters</p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="p-3.5 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100">
+            <ShieldCheck className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-1">
+      <div className="bg-white rounded-2xl p-1.5 border border-slate-200/80 shadow-xs flex items-center gap-2">
         <button
           onClick={() => setActiveTab('users')}
-          className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+          className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'users'
               ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-              : 'text-slate-600 hover:bg-slate-100'
+              : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -427,10 +437,10 @@ export const AdminDashboardPage = () => {
 
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+          className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'requests'
               ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-              : 'text-slate-600 hover:bg-slate-100'
+              : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
           <Activity className="w-4 h-4" />
@@ -442,146 +452,172 @@ export const AdminDashboardPage = () => {
       {activeTab === 'users' && (
         <div className="space-y-6">
           {/* Filter Bar */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
             <div className="flex-1 relative">
               <input
                 type="text"
-                placeholder="Search donors by name, email, city or phone..."
+                placeholder="Search users by name, email, city, hospital, or phone..."
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
-                className="w-full px-4 py-2.5 pl-10 rounded-xl border border-slate-200 text-sm focus:border-red-500 focus:outline-hidden"
+                className="w-full px-4 py-2.5 pl-10 rounded-xl border border-slate-200 text-sm focus:border-red-500 focus:outline-hidden font-medium"
               />
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             </div>
 
-            <select
-              value={userBloodGroupFilter}
-              onChange={(e) => setUserBloodGroupFilter(e.target.value)}
-              className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 focus:border-red-500 focus:outline-hidden cursor-pointer"
-            >
-              <option value="All">All Blood Types</option>
-              {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                <option key={bg} value={bg}>Blood Group {bg}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              {/* Role filter */}
+              <select
+                value={userRoleFilter}
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 focus:border-red-500 focus:outline-hidden cursor-pointer"
+              >
+                <option value="All">All Roles ({users.length})</option>
+                <option value="donor">Donors Only ({totalDonors})</option>
+                <option value="user">Seekers Only ({totalSeekers})</option>
+                <option value="admin">Admins ({totalAdmins})</option>
+              </select>
+
+              {/* Blood group filter */}
+              <select
+                value={userBloodGroupFilter}
+                onChange={(e) => setUserBloodGroupFilter(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 focus:border-red-500 focus:outline-hidden cursor-pointer"
+              >
+                <option value="All">All Blood Types</option>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                  <option key={bg} value={bg}>Blood Group {bg}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Users Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase font-bold text-slate-500">
+                <thead className="bg-slate-50 border-b border-slate-200/80 text-xs uppercase font-bold text-slate-500">
                   <tr>
                     <th className="px-6 py-4">User / Account</th>
                     <th className="px-6 py-4">Blood Group</th>
                     <th className="px-6 py-4">Location & Hospital</th>
                     <th className="px-6 py-4">Role & Auth</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Admin Controls</th>
+                    <th className="px-6 py-4">Live Status</th>
+                    <th className="px-6 py-4 text-right">Admin Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id || user.uid} className="hover:bg-slate-50/80 transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-sm flex-shrink-0 border border-slate-200">
-                            {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U')}
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <tr key={user.id || user.uid} className="hover:bg-slate-50/80 transition">
+                        <td className="px-6 py-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
+                              {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U')}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>{user.name || user.displayName || user.email?.split('@')[0] || 'User'}</span>
+                                {user.isVerified && (
+                                  <ShieldCheck className="w-4 h-4 text-emerald-500" title="Verified Volunteer" />
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-500">{user.email}</p>
+                              <p className="text-xs text-slate-400 font-mono mt-0.5">{user.phone || 'No phone provided'}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span>{user.name || user.displayName || user.email?.split('@')[0] || 'User'}</span>
-                              {user.isVerified && (
-                                <ShieldCheck className="w-4 h-4 text-emerald-500" title="Verified Donor" />
-                              )}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 rounded-xl bg-red-50 text-red-700 font-extrabold text-xs border border-red-100">
+                            {user.bloodGroup || 'O+'}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <p className="text-slate-800 font-semibold">{user.city || 'Location unlisted'}</p>
+                          {user.hospitalName && (
+                            <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                              <Building2 className="w-3 h-3 text-red-500" />
+                              <span className="truncate max-w-[180px]">{user.hospitalName}</span>
                             </p>
-                            <p className="text-xs text-slate-500">{user.email}</p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">{user.phone || 'No phone'}</p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 font-bold text-xs">
-                          {user.bloodGroup || 'O+'}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <p className="text-slate-700 font-medium">{user.city || 'Location unlisted'}</p>
-                        {user.hospitalName && (
-                          <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                            <Building2 className="w-3 h-3 text-slate-400" />
-                            <span>{user.hospitalName}</span>
+                          )}
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Joined {formatUserTime(user.createdAt)}
                           </p>
-                        )}
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Joined {formatUserTime(user.createdAt)}
-                        </p>
-                      </td>
+                        </td>
 
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
-                            user.role === 'admin'
-                              ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {user.role || 'donor'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {user.provider === 'google' ? 'Google Auth' : 'Email Auth'}
-                          </span>
-                        </div>
-                      </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${
+                              user.role === 'admin'
+                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                : (user.isDonor || user.role === 'donor')
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}>
+                              {user.role === 'admin' ? 'Admin' : (user.isDonor || user.role === 'donor') ? 'Blood Donor' : 'Patient Seeker'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {user.provider === 'google' ? 'Google 1-Click' : 'Email & Password'}
+                            </span>
+                          </div>
+                        </td>
 
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleToggleUserAvailability(user)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${
-                            user.isAvailable
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          <span className={`w-2 h-2 rounded-full ${user.isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                          <span>{user.isAvailable ? 'Available' : 'Busy'}</span>
-                        </button>
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <td className="px-6 py-4">
                           <button
-                            onClick={() => handleToggleVerification(user)}
-                            className={`p-1.5 rounded-lg text-xs font-bold border transition ${
-                              user.isVerified
-                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            onClick={() => handleToggleUserAvailability(user)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                              user.isAvailable
+                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
-                            title="Toggle Verification Badge"
+                            title="Click to toggle availability"
                           >
-                            <ShieldCheck className="w-4 h-4" />
+                            <span className={`w-2 h-2 rounded-full ${user.isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                            <span>{user.isAvailable ? 'Available' : 'Busy'}</span>
                           </button>
+                        </td>
 
-                          <button
-                            onClick={() => handleToggleRole(user)}
-                            className="p-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition"
-                            title="Promote / Demote Role"
-                          >
-                            <Crown className="w-4 h-4" />
-                          </button>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleToggleVerification(user)}
+                              className={`p-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                                user.isVerified
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                              }`}
+                              title={user.isVerified ? "Revoke Verification" : "Grant Verified Badge"}
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </button>
 
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
-                            title="Delete User"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                            <button
+                              onClick={() => handleToggleRole(user)}
+                              className="p-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition cursor-pointer"
+                              title="Promote / Demote Role"
+                            >
+                              <Crown className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              className="p-2 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition cursor-pointer"
+                              title="Permanently Delete User"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                        No registered users match your search and filter criteria.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>

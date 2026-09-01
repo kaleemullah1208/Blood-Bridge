@@ -371,7 +371,26 @@ export const subscribeToAllUsers = (callback) => {
     return onSnapshot(q, (snapshot) => {
       const users = [];
       snapshot.forEach((docSnap) => {
-        users.push({ id: docSnap.id, uid: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data() || {};
+        users.push({
+          id: docSnap.id,
+          uid: docSnap.id,
+          name: data.name || data.displayName || data.email?.split('@')[0] || 'User',
+          email: data.email || '',
+          phone: data.phone || '',
+          bloodGroup: data.bloodGroup || 'O+',
+          city: data.city || '',
+          hospitalName: data.hospitalName || '',
+          role: data.role || (data.isDonor ? 'donor' : 'user'),
+          isDonor: data.isDonor !== undefined ? data.isDonor : (data.role === 'donor'),
+          isAvailable: data.isAvailable !== undefined ? data.isAvailable : true,
+          isVerified: Boolean(data.isVerified),
+          donationsCount: data.donationsCount || 0,
+          lastDonationDate: data.lastDonationDate || '',
+          provider: data.provider || 'email',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt
+        });
       });
       
       // Sort users by most recently registered first
