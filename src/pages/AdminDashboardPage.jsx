@@ -224,53 +224,69 @@ export const AdminDashboardPage = () => {
   if (!isAdmin) {
     return (
       <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-slate-200 shadow-xl space-y-6">
+        <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 border border-slate-200 shadow-2xl space-y-6 relative overflow-hidden">
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-rose-600" />
+          
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-purple-600/30">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-xl shadow-purple-600/30">
               <Lock className="w-7 h-7" />
             </div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Admin Authorization</h2>
-            <p className="text-xs text-slate-500">
-              Please enter your administrator credentials to access the management portal.
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Clinical & Operations Access</h2>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              Please enter your authorized personnel credentials to access the central operations control.
             </p>
           </div>
 
           <form onSubmit={handleAdminSignIn} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 uppercase">Admin Email</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Official Email *</label>
               <input
                 type="email"
                 required
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
                 placeholder="admin@gmail.com"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-purple-500 focus:outline-hidden"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-purple-600 focus:outline-hidden"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 uppercase">Admin Password</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Access Password *</label>
               <input
                 type="password"
                 required
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-purple-500 focus:outline-hidden"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-purple-600 focus:outline-hidden"
               />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminEmail(ADMIN_EMAIL);
+                  setAdminPassword(ADMIN_PASS);
+                }}
+                className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition flex items-center gap-1"
+              >
+                <KeyRound className="w-3 h-3 text-purple-600" />
+                <span>Fill Demo Credentials</span>
+              </button>
             </div>
 
             <button
               type="submit"
               disabled={loggingInAdmin}
-              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-md shadow-purple-600/30 flex items-center justify-center gap-2 transition"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 hover:from-purple-800 hover:to-indigo-700 text-white font-bold text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 transition"
             >
               {loggingInAdmin ? (
                 <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  <KeyRound className="w-4 h-4" />
-                  <span>Unlock Admin Dashboard</span>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Access Operations Console</span>
                 </>
               )}
             </button>
@@ -288,20 +304,20 @@ export const AdminDashboardPage = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Admin Control Center</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold">
+                <ShieldCheck className="w-4 h-4 text-purple-400" />
+                <span>Clinical & Operations Console</span>
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
                 <Radio className="w-3.5 h-3.5 animate-ping text-emerald-400" />
-                <span>Real-Time Firestore Sync Active</span>
+                <span>Real-Time Network Sync Active</span>
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
-              BloodBridge Live Administration
+              Clinical & Operations Control Center
             </h1>
             <p className="text-slate-400 text-sm max-w-xl">
-              Live real-time feed of all registered users (Gmail & Email signups), voluntary donors, and emergency requests.
+              Central management dashboard for verified voluntary donors, hospital emergency transfusion broadcasts, and community accounts.
             </p>
           </div>
 
@@ -313,23 +329,24 @@ export const AdminDashboardPage = () => {
               title="Force Refresh Data"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="hidden sm:inline">Sync Data</span>
             </button>
 
             <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-3.5 rounded-2xl">
-              <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center font-bold">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center font-bold">
                 <Crown className="w-5 h-5 text-white" />
               </div>
               <div className="text-xs">
-                <p className="text-slate-400 font-semibold">Active Administrator</p>
+                <p className="text-slate-400 font-semibold">Authorized Staff</p>
                 <p className="font-bold text-white truncate max-w-[170px]">
-                  {userProfile?.name || currentUser?.email || 'Super Admin'}
+                  {userProfile?.name || currentUser?.email || 'Operations Director'}
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+
 
       {/* KPI Stats Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

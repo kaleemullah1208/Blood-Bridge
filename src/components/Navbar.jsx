@@ -100,20 +100,20 @@ export const Navbar = () => {
                 Post Request
               </NavLink>
 
-              {/* If Admin is logged in, show direct Admin Console link */}
+              {/* If Admin is logged in, show direct Operations Console link */}
               {isAdmin && (
                 <NavLink 
                   to="/admin" 
                   className={({ isActive }) =>
-                    `inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all ${
+                    `inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
                       isActive
-                        ? 'bg-purple-100 text-purple-800 ring-2 ring-purple-600/30'
-                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                        ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200'
                     }`
                   }
                 >
-                  <ShieldCheck className="w-4 h-4 text-purple-600" />
-                  <span>Admin Console</span>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Operations Console</span>
                 </NavLink>
               )}
             </nav>
@@ -132,16 +132,16 @@ export const Navbar = () => {
                 </Link>
               )}
 
-              {/* Professional Staff & Admin Portal Button */}
+              {/* Professional Clinical & Staff Portal Button */}
               {!isAdmin && (
                 <button
                   type="button"
                   onClick={() => setShowAdminModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shadow-2xs"
-                  title="Authorized Staff & Administration Access"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-900 border border-purple-200/80 transition shadow-2xs group"
+                  title="Authorized Clinical & Operations Staff Access"
                 >
-                  <ShieldCheck className="w-4 h-4 text-purple-600" />
-                  <span>Staff & Admin</span>
+                  <ShieldCheck className="w-4 h-4 text-purple-600 group-hover:scale-110 transition-transform" />
+                  <span>Clinical & Staff Portal</span>
                 </button>
               )}
 
