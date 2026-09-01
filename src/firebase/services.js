@@ -440,10 +440,10 @@ export const toggleUserAvailability = async (uid, currentAvailability) => {
 
   if (isFirebaseConfigured) {
     const docRef = doc(db, USERS_COLLECTION, uid);
-    await updateDoc(docRef, { 
+    await setDoc(docRef, { 
       isAvailable: newStatus,
       updatedAt: serverTimestamp() 
-    });
+    }, { merge: true });
   }
   return newStatus;
 };
@@ -458,10 +458,10 @@ export const adminUpdateUser = async (uid, updatedFields) => {
 
   if (isFirebaseConfigured) {
     const docRef = doc(db, USERS_COLLECTION, uid);
-    await updateDoc(docRef, {
+    await setDoc(docRef, {
       ...updatedFields,
       updatedAt: serverTimestamp()
-    });
+    }, { merge: true });
   }
 };
 

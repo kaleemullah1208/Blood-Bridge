@@ -29,6 +29,8 @@ export const getFriendlyAuthErrorMessage = (error) => {
   const code = error.code || '';
   
   switch (code) {
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for Google Sign-In. Please add your Vercel domain (blood-bridge-iota.vercel.app) to Firebase Console -> Authentication -> Settings -> Authorized domains.';
     case 'auth/email-already-in-use':
       return 'This email address is already registered. Please sign in instead.';
     case 'auth/invalid-email':
@@ -45,6 +47,8 @@ export const getFriendlyAuthErrorMessage = (error) => {
       return 'Too many failed login attempts. Please wait a few moments before trying again.';
     case 'auth/network-request-failed':
       return 'Network connection error. Please check your internet connection and try again.';
+    case 'permission-denied':
+      return 'Database permission error. Please verify your authentication state or security rules.';
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
       return null; // Silent cancellation
@@ -134,8 +138,8 @@ export const AuthProvider = ({ children }) => {
               isVerified: false,
               lastDonationDate: '',
               provider: firebaseUser.providerData?.[0]?.providerId || 'google',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
             };
 
             try {
@@ -185,7 +189,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // 1. Register with Email & Password
+  // 1. Register with Email & Password (Atomic with Cleanup/Recovery)
   const register = async (email, password, { name, phone, bloodGroup, city, role = 'donor', hospitalName = '' }) => {
     const trimmedEmail = email.trim().toLowerCase();
     const isAdmin = trimmedEmail === ADMIN_EMAIL.toLowerCase();
@@ -195,12 +199,14 @@ export const AuthProvider = ({ children }) => {
     isRegisteringRef.current = true;
     let uid = 'usr-' + Date.now();
     let firebaseUser = null;
+    let authCreatedNow = false;
 
     try {
       if (isFirebaseConfigured) {
         const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
         firebaseUser = userCredential.user;
         uid = firebaseUser.uid;
+        authCreatedNow = true;
 
         try {
           await updateProfile(firebaseUser, { displayName: name.trim() });
@@ -231,11 +237,24 @@ export const AuthProvider = ({ children }) => {
 
       if (isFirebaseConfigured) {
         const userDocRef = doc(db, 'users', uid);
-        await setDoc(userDocRef, {
-          ...newProfile,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        try {
+          await setDoc(userDocRef, {
+            ...newProfile,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (firestoreErr) {
+          console.error("Firestore document write failed during registration:", firestoreErr);
+          // If auth was just created, clean up the orphaned auth account so user is not stuck
+          if (authCreatedNow && firebaseUser) {
+            try {
+              await firebaseUser.delete();
+            } catch (deleteErr) {
+              console.warn("Could not roll back auth user after Firestore failure:", deleteErr);
+            }
+          }
+          throw firestoreErr;
+        }
       }
 
       const authUser = {
@@ -289,7 +308,6 @@ export const AuthProvider = ({ children }) => {
         };
         await setDoc(userDocRef, { updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
       } else {
-        const isoNow = new Date().toISOString();
         profile = {
           uid: user.uid,
           id: user.uid,
@@ -447,7 +465,7 @@ export const AuthProvider = ({ children }) => {
     setShowOnboardingModal(false);
   };
 
-  // 5. Update Profile details in Firestore & Context
+  // 5. Update Profile details in Firestore & Context (Safe Upsert)
   const updateUserData = async (updatedFields) => {
     if (!currentUser) throw new Error("Must be logged in to update profile");
 
@@ -457,10 +475,10 @@ export const AuthProvider = ({ children }) => {
 
     if (isFirebaseConfigured && currentUser.uid) {
       const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
+      await setDoc(userDocRef, {
         ...updatedFields,
         updatedAt: serverTimestamp()
-      }).catch(console.warn);
+      }, { merge: true }).catch(console.warn);
     }
     return updated;
   };
@@ -475,10 +493,10 @@ export const AuthProvider = ({ children }) => {
 
     if (isFirebaseConfigured && currentUser.uid) {
       const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
+      await setDoc(userDocRef, {
         isAvailable: newStatus,
         updatedAt: serverTimestamp()
-      }).catch(console.warn);
+      }, { merge: true }).catch(console.warn);
     }
     return newStatus;
   };
@@ -523,6 +541,7 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
