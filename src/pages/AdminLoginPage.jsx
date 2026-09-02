@@ -115,7 +115,7 @@ export const AdminLoginPage = () => {
                   if (touched.email) setErrors(validate());
                 }}
                 onBlur={() => handleBlur('email')}
-                placeholder="admin@gmail.com"
+                placeholder="example@gmail.com"
                 className={`w-full px-4 py-3 pl-10 rounded-xl border text-sm font-medium transition focus:outline-hidden focus:ring-2 ${
                   touched.email && errors.email
                     ? 'border-red-400 bg-red-50/30 focus:ring-red-500/30 focus:border-red-500'

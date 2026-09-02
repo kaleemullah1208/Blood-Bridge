@@ -54,9 +54,15 @@ export const PostRequestPage = () => {
     const errors = {};
     if (!formData.patientName.trim()) errors.patientName = 'Patient name is required';
     if (!formData.hospitalName.trim()) errors.hospitalName = 'Hospital / Clinic name is required';
-    if (!formData.city.trim()) errors.city = 'City is required';
-    if (!formData.contactPhone.trim()) errors.contactPhone = 'Emergency contact number is required';
-    if (formData.unitsRequired < 1) errors.unitsRequired = 'At least 1 unit is required';
+    if (!formData.city.trim()) errors.city = 'City / Location is required';
+    if (!formData.contactPhone.trim()) {
+      errors.contactPhone = 'Emergency contact number is required';
+    } else if (formData.contactPhone.trim().length < 7) {
+      errors.contactPhone = 'Please enter a valid phone number (at least 7 digits)';
+    }
+    if (!formData.unitsRequired || formData.unitsRequired < 1 || formData.unitsRequired > 20) {
+      errors.unitsRequired = 'Units required must be between 1 and 20';
+    }
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };

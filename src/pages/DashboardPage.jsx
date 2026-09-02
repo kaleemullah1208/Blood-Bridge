@@ -713,6 +713,7 @@ export const DashboardPage = () => {
                 <label className="text-xs font-bold text-slate-700 uppercase">Contact Phone Number</label>
                 <input
                   type="tel"
+                  placeholder="+1 (555) 019-2834"
                   value={profileForm.phone}
                   onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-red-500 focus:outline-hidden font-medium"
@@ -723,6 +724,7 @@ export const DashboardPage = () => {
                 <label className="text-xs font-bold text-slate-700 uppercase">City / Location</label>
                 <input
                   type="text"
+                  placeholder="e.g. New York, NY"
                   value={profileForm.city}
                   onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-red-500 focus:outline-hidden font-medium"

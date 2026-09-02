@@ -115,7 +115,7 @@ export const AdminLoginModal = ({ isOpen, onClose }) => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@gmail.com"
+                placeholder="example@gmail.com"
                 className="w-full px-4 py-2.5 pl-10 rounded-xl border border-slate-200 focus:border-purple-600 focus:outline-hidden focus:ring-2 focus:ring-purple-600/20 text-sm font-medium transition"
               />
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

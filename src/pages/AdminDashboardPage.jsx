@@ -172,12 +172,31 @@ export const AdminDashboardPage = () => {
   };
 
   const handleDeleteUser = async (user) => {
+    if (user.role === 'admin' || user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      showError("Protected Account: Administrator profiles cannot be deleted.");
+      return;
+    }
     if (!window.confirm(`Admin Action: Permanently delete account for "${user.name || user.email}" from Firebase?`)) return;
     try {
       await adminDeleteUser(user.uid || user.id);
       showSuccess("User account deleted from database.");
     } catch (err) {
       showError("Failed to delete user in Firebase.");
+    }
+  };
+
+  const handleRecordDonation = async (user) => {
+    const currentCount = Number(user.donationsCount) || 0;
+    const newCount = currentCount + 1;
+    const todayStr = new Date().toISOString().split('T')[0];
+    try {
+      await adminUpdateUser(user.uid || user.id, {
+        donationsCount: newCount,
+        lastDonationDate: todayStr
+      });
+      showSuccess(`Blood donation logged for ${user.name || user.email}! Total donations: ${newCount}`);
+    } catch (err) {
+      showError("Failed to record donation.");
     }
   };
 
@@ -243,6 +262,7 @@ export const AdminDashboardPage = () => {
   const availableDonors = users.filter(u => (u.isDonor || u.role === 'donor') && u.isAvailable).length;
   const totalSeekers = users.filter(u => !u.isDonor && u.role !== 'donor' && u.role !== 'admin').length;
   const totalAdmins = users.filter(u => u.role === 'admin').length;
+  const totalCompletedDonations = users.reduce((sum, u) => sum + (Number(u.donationsCount) || 0), 0) + fulfilledRequests;
 
   // If user is not logged in as Admin, show Authorization Lock Screen
   if (!isAdmin) {
@@ -269,7 +289,7 @@ export const AdminDashboardPage = () => {
                 required
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                placeholder="admin@gmail.com"
+                placeholder="example@gmail.com"
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-purple-600 focus:outline-hidden"
               />
             </div>
@@ -394,18 +414,18 @@ export const AdminDashboardPage = () => {
 
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Requests</p>
-            <h3 className="text-3xl font-black text-red-600 mt-1">{activeRequests}</h3>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending Transfusions</p>
+            <h3 className="text-3xl font-black text-amber-600 mt-1">{activeRequests}</h3>
             <p className="text-xs text-slate-400 font-semibold mt-1">{criticalRequests} Critical Urgency</p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-red-50 text-red-600 border border-red-100">
+          <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
             <Activity className="w-6 h-6" />
           </div>
         </div>
 
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Fulfilled Transfusions</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Blood Donated & Fulfilled</p>
             <h3 className="text-3xl font-black text-emerald-600 mt-1">{fulfilledRequests}</h3>
             <p className="text-xs text-slate-400 font-semibold mt-1">From {totalRequests} total requests</p>
           </div>
@@ -449,7 +469,7 @@ export const AdminDashboardPage = () => {
           }`}
         >
           <Activity className="w-4 h-4" />
-          <span>All Blood Requests ({requests.length})</span>
+          <span>Transfusion Requests ({requests.length})</span>
         </button>
       </div>
 
@@ -505,6 +525,7 @@ export const AdminDashboardPage = () => {
                     <th className="px-6 py-4">User / Account</th>
                     <th className="px-6 py-4">Blood Group</th>
                     <th className="px-6 py-4">Location & Hospital</th>
+                    <th className="px-6 py-4">Donations History</th>
                     <th className="px-6 py-4">Role & Auth</th>
                     <th className="px-6 py-4">Live Status</th>
                     <th className="px-6 py-4 text-right">Admin Actions</th>
@@ -549,6 +570,24 @@ export const AdminDashboardPage = () => {
                           <p className="text-[11px] text-slate-400 mt-0.5">
                             Joined {formatUserTime(user.createdAt)}
                           </p>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-800">
+                              <Droplet className="w-3.5 h-3.5 text-red-600 fill-red-600" />
+                              <span>{Number(user.donationsCount) > 0 ? `${user.donationsCount} Blood Donations` : '0 Donations (Ready)'}</span>
+                            </span>
+                            {(user.isDonor || user.role === 'donor') && (
+                              <button
+                                onClick={() => handleRecordDonation(user)}
+                                className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition cursor-pointer"
+                                title="Click to log a completed blood donation"
+                              >
+                                +1 Log Donation
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-6 py-4">
@@ -605,20 +644,30 @@ export const AdminDashboardPage = () => {
                               <Crown className="w-4 h-4" />
                             </button>
 
-                            <button
-                              onClick={() => handleDeleteUser(user)}
-                              className="p-2 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition cursor-pointer"
-                              title="Permanently Delete User"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {/* Only allow deleting non-admin users */}
+                            {user.role !== 'admin' && user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase() ? (
+                              <button
+                                onClick={() => handleDeleteUser(user)}
+                                className="p-2 rounded-xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition cursor-pointer"
+                                title="Permanently Delete User"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <span
+                                className="p-2 rounded-xl bg-purple-50 text-purple-400 border border-purple-100 cursor-not-allowed inline-flex items-center justify-center"
+                                title="Protected: Administrator accounts cannot be deleted"
+                              >
+                                <ShieldCheck className="w-4 h-4 text-purple-500" />
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan="7" className="px-6 py-12 text-center text-slate-400">
                         No registered users match your search and filter criteria.
                       </td>
                     </tr>
@@ -652,10 +701,10 @@ export const AdminDashboardPage = () => {
                 onChange={(e) => setRequestFilterStatus(e.target.value)}
                 className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700 focus:border-red-500 focus:outline-hidden cursor-pointer"
               >
-                <option value="All">All Statuses</option>
-                <option value="Active">Status: Active</option>
-                <option value="Fulfilled">Status: Fulfilled</option>
-                <option value="Cancelled">Status: Cancelled</option>
+                <option value="All">All Statuses ({requests.length})</option>
+                <option value="Active">Pending Transfusion ({activeRequests})</option>
+                <option value="Fulfilled">Blood Donated & Fulfilled ({fulfilledRequests})</option>
+                <option value="Cancelled">Cancelled</option>
               </select>
 
               <select
@@ -686,7 +735,7 @@ export const AdminDashboardPage = () => {
                       <th className="px-6 py-4">Hospital & City</th>
                       <th className="px-6 py-4">Contact</th>
                       <th className="px-6 py-4">Urgency</th>
-                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Donation Status</th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -727,15 +776,22 @@ export const AdminDashboardPage = () => {
                         </td>
 
                         <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            req.status === 'Active'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : req.status === 'Fulfilled'
-                              ? 'bg-slate-100 text-slate-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}>
-                            {req.status}
-                          </span>
+                          {req.status === 'Active' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase bg-amber-50 text-amber-800 border border-amber-200 shadow-xs">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              <span>Pending Transfusion</span>
+                            </span>
+                          ) : req.status === 'Fulfilled' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Blood Donated</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
+                              <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Cancelled</span>
+                            </span>
+                          )}
                         </td>
 
                         <td className="px-6 py-4 text-right">
@@ -743,24 +799,24 @@ export const AdminDashboardPage = () => {
                             {req.status !== 'Fulfilled' && (
                               <button
                                 onClick={() => handleStatusChange(req.id, 'Fulfilled')}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition"
-                                title="Mark as Fulfilled"
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                                title="Mark this request as Blood Donated & Fulfilled"
                               >
-                                Fulfil
+                                Mark as Donated
                               </button>
                             )}
                             {req.status !== 'Active' && (
                               <button
                                 onClick={() => handleStatusChange(req.id, 'Active')}
-                                className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold hover:bg-blue-100 transition"
-                                title="Reactivate Request"
+                                className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-xs font-bold transition cursor-pointer"
+                                title="Reactivate this request as Pending Transfusion"
                               >
-                                Reopen
+                                Reopen as Pending
                               </button>
                             )}
                             <button
                               onClick={() => handleDeleteRequest(req.id)}
-                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
+                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition cursor-pointer"
                               title="Delete Request"
                             >
                               <Trash2 className="w-4 h-4" />
