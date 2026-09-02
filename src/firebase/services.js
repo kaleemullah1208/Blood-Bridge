@@ -329,7 +329,7 @@ export const subscribeToDonors = (callback) => {
     return onSnapshot(q, (snapshot) => {
       const donors = [];
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
+        const data = docSnap.data() || {};
         const isDonorUser = data.isDonor === true || data.role === 'donor';
         if (isDonorUser) {
           donors.push({ 
@@ -337,7 +337,8 @@ export const subscribeToDonors = (callback) => {
             uid: docSnap.id, 
             ...data,
             isDonor: true,
-            isAvailable: data.isAvailable !== undefined ? data.isAvailable : true
+            isAvailable: data.isAvailable !== undefined ? data.isAvailable : true,
+            isVerified: data.isVerified !== undefined ? Boolean(data.isVerified) : true
           });
         }
       });
@@ -384,7 +385,7 @@ export const subscribeToAllUsers = (callback) => {
           role: data.role || (data.isDonor ? 'donor' : 'user'),
           isDonor: data.isDonor !== undefined ? data.isDonor : (data.role === 'donor'),
           isAvailable: data.isAvailable !== undefined ? data.isAvailable : true,
-          isVerified: Boolean(data.isVerified),
+          isVerified: data.isVerified !== undefined ? Boolean(data.isVerified) : true,
           donationsCount: data.donationsCount || 0,
           lastDonationDate: data.lastDonationDate || '',
           provider: data.provider || 'email',
@@ -441,7 +442,7 @@ export const setUserProfileDoc = async (uid, userData) => {
     hospitalName: userData.hospitalName || '',
     isDonor: userData.isDonor !== undefined ? userData.isDonor : (userData.role === 'donor'),
     isAvailable: userData.isAvailable !== undefined ? userData.isAvailable : true,
-    isVerified: userData.isVerified || false,
+    isVerified: userData.isVerified !== undefined ? userData.isVerified : true,
     role: userData.role || 'donor',
     provider: userData.provider || 'email',
     updatedAt: serverTimestamp()

@@ -96,8 +96,9 @@ export const AuthProvider = ({ children }) => {
               uid: firebaseUser.uid,
               id: firebaseUser.uid,
               ...data,
-              role: isAdmin ? 'admin' : (data.role || 'user'),
-              isDonor: data.isDonor !== undefined ? data.isDonor : (data.role === 'donor')
+              role: isAdmin ? 'admin' : (data.role || 'donor'),
+              isDonor: data.isDonor !== undefined ? data.isDonor : (data.role === 'donor' || !isAdmin),
+              isVerified: data.isVerified !== undefined ? Boolean(data.isVerified) : true
             };
             setUserProfile(profile);
             setCurrentUser({
@@ -117,7 +118,8 @@ export const AuthProvider = ({ children }) => {
                 role: profile.role,
                 isDonor: profile.isDonor,
                 bloodGroup: profile.bloodGroup,
-                city: profile.city
+                city: profile.city,
+                isVerified: profile.isVerified
               };
               localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(sessionData));
             } catch { /* ignore */ }
@@ -132,12 +134,12 @@ export const AuthProvider = ({ children }) => {
               bloodGroup: 'O+',
               city: '',
               hospitalName: '',
-              role: isAdmin ? 'admin' : 'user',
-              isDonor: false,
-              isAvailable: false,
-              isVerified: false,
+              role: isAdmin ? 'admin' : 'donor',
+              isDonor: !isAdmin,
+              isAvailable: !isAdmin,
+              isVerified: true,
               lastDonationDate: '',
-              provider: firebaseUser.providerData?.[0]?.providerId || 'google',
+              provider: firebaseUser.providerData?.[0]?.providerId || 'email',
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             };
@@ -228,7 +230,7 @@ export const AuthProvider = ({ children }) => {
         role: assignedRole,
         isDonor: isDonor,
         isAvailable: isDonor,
-        isVerified: false,
+        isVerified: true,
         lastDonationDate: '',
         provider: 'email',
         createdAt: isoNow,
@@ -303,10 +305,11 @@ export const AuthProvider = ({ children }) => {
           uid: user.uid,
           id: user.uid,
           ...existingData,
-          role: isAdmin ? 'admin' : (existingData.role || 'user'),
-          isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor')
+          role: isAdmin ? 'admin' : (existingData.role || 'donor'),
+          isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor' || !isAdmin),
+          isVerified: existingData.isVerified !== undefined ? Boolean(existingData.isVerified) : true
         };
-        await setDoc(userDocRef, { updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+        await setDoc(userDocRef, { isVerified: profile.isVerified, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
       } else {
         profile = {
           uid: user.uid,
@@ -317,10 +320,10 @@ export const AuthProvider = ({ children }) => {
           bloodGroup: 'O+',
           city: '',
           hospitalName: '',
-          role: isAdmin ? 'admin' : 'user',
-          isDonor: false,
-          isAvailable: false,
-          isVerified: false,
+          role: isAdmin ? 'admin' : 'donor',
+          isDonor: !isAdmin,
+          isAvailable: !isAdmin,
+          isVerified: true,
           lastDonationDate: '',
           provider: 'google',
           createdAt: serverTimestamp(),
@@ -362,9 +365,54 @@ export const AuthProvider = ({ children }) => {
 
     // Direct Administrator credential handling
     if (isAdminCredentials) {
+      let adminUid = 'admin-master-uid';
+      let adminFirebaseUser = null;
+
+      if (isFirebaseConfigured) {
+        try {
+          const cred = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS);
+          adminFirebaseUser = cred.user;
+          adminUid = adminFirebaseUser.uid;
+        } catch (signInErr) {
+          if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
+            try {
+              const cred = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS);
+              adminFirebaseUser = cred.user;
+              adminUid = adminFirebaseUser.uid;
+              await updateProfile(adminFirebaseUser, { displayName: 'Super Administrator' });
+            } catch (createErr) {
+              console.warn("Could not auto-create admin user in Firebase Auth:", createErr);
+            }
+          } else {
+            console.warn("Firebase Auth admin sign-in notice:", signInErr.message);
+          }
+        }
+
+        try {
+          const adminDocRef = doc(db, 'users', adminUid);
+          await setDoc(adminDocRef, {
+            uid: adminUid,
+            id: adminUid,
+            name: 'Super Administrator',
+            email: ADMIN_EMAIL,
+            phone: '+1 (555) 999-0000',
+            bloodGroup: 'O+',
+            city: 'Headquarters',
+            role: 'admin',
+            isDonor: false,
+            isAvailable: false,
+            isVerified: true,
+            provider: 'admin',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (docErr) {
+          console.warn("Could not sync admin Firestore doc:", docErr);
+        }
+      }
+
       const adminProfile = {
-        uid: 'admin-master-uid',
-        id: 'admin-master-uid',
+        uid: adminUid,
+        id: adminUid,
         name: 'Super Administrator',
         email: ADMIN_EMAIL,
         phone: '+1 (555) 999-0000',
@@ -378,7 +426,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       const adminUser = {
-        uid: 'admin-master-uid',
+        uid: adminUid,
         email: ADMIN_EMAIL,
         displayName: 'Super Administrator',
         role: 'admin'
@@ -403,22 +451,40 @@ export const AuthProvider = ({ children }) => {
 
       let profile;
       if (docSnap.exists()) {
-        profile = { uid: user.uid, id: user.uid, ...docSnap.data() };
+        const existingData = docSnap.data();
+        profile = {
+          uid: user.uid,
+          id: user.uid,
+          ...existingData,
+          role: trimmedEmail === ADMIN_EMAIL.toLowerCase() ? 'admin' : (existingData.role || 'donor'),
+          isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor' || true),
+          isVerified: existingData.isVerified !== undefined ? Boolean(existingData.isVerified) : true
+        };
+        // Ensure isVerified is true in Firestore
+        if (existingData.isVerified === undefined) {
+          await setDoc(userDocRef, { isVerified: true, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+        }
       } else {
+        const defaultRole = trimmedEmail === ADMIN_EMAIL.toLowerCase() ? 'admin' : (selectedRole || 'donor');
+        const defaultIsDonor = defaultRole === 'donor';
         profile = {
           uid: user.uid,
           id: user.uid,
           name: user.displayName || trimmedEmail.split('@')[0],
           email: trimmedEmail,
-          phone: '',
+          phone: user.phoneNumber || '',
           bloodGroup: 'O+',
           city: '',
-          role: trimmedEmail === ADMIN_EMAIL.toLowerCase() ? 'admin' : (selectedRole || 'user'),
-          isDonor: selectedRole === 'donor',
-          isAvailable: selectedRole === 'donor',
-          provider: 'email'
+          hospitalName: '',
+          role: defaultRole,
+          isDonor: defaultIsDonor,
+          isAvailable: defaultIsDonor,
+          isVerified: true,
+          provider: 'email',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         };
-        await setDoc(userDocRef, { ...profile, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+        await setDoc(userDocRef, profile, { merge: true });
       }
 
       if (requireAdmin && profile.role !== 'admin' && trimmedEmail !== ADMIN_EMAIL.toLowerCase()) {

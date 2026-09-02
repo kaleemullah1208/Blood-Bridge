@@ -74,13 +74,14 @@ export const AdminDashboardPage = () => {
 
     const unsubUsers = subscribeToAllUsers((data) => {
       setUsers(data);
+      setLoading(false);
     });
 
     return () => {
       if (typeof unsubReqs === 'function') unsubReqs();
       if (typeof unsubUsers === 'function') unsubUsers();
     };
-  }, []);
+  }, [currentUser?.uid, isAdmin]);
 
   const refreshUnsub = useRef(null);
 

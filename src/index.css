@@ -63,3 +63,46 @@
 .beacon-critical {
   animation: beacon 1.8s infinite;
 }
+
+/* BloodBridge Lifeline ECG and Heartbeat Animations */
+@keyframes heartbeat {
+  0% { transform: scale(1); }
+  14% { transform: scale(1.15); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.18); }
+  70% { transform: scale(1); }
+}
+
+@keyframes bloodRipple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+@keyframes arterialFlow {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 1.4s ease-in-out infinite;
+}
+
+.animate-blood-ripple {
+  animation: bloodRipple 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+.animate-arterial-flow {
+  animation: arterialFlow 1.5s ease-in-out infinite;
+}
+

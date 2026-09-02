@@ -9,6 +9,8 @@ import { Footer } from './components/Footer';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminRoute } from './components/AdminRoute';
 
+import { RouteLoadingIndicator } from './components/RouteLoadingIndicator';
+
 // Pages
 import { HomePage } from './pages/HomePage';
 import { FindDonorsPage } from './pages/FindDonorsPage';
@@ -26,6 +28,9 @@ export const App = () => {
       <ToastProvider>
         <AuthProvider>
           <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+            {/* Top Arterial Route Progress Bar & Transition */}
+            <RouteLoadingIndicator />
+
             {/* Top Navbar */}
             <Navbar />
 
