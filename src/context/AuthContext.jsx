@@ -5,7 +5,8 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
-  updateProfile
+  updateProfile,
+  deleteUser
 } from 'firebase/auth';
 import { 
   doc, 
@@ -115,40 +116,47 @@ export const AuthProvider = ({ children }) => {
               localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(sessionData));
             } catch { /* ignore */ }
           } else if (!isRegisteringRef.current) {
-            // Auto-heal missing Firestore document for existing Firebase Auth users
-            const initialProfile = {
-              uid: firebaseUser.uid,
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || (isAdmin ? 'Super Administrator' : firebaseUser.email?.split('@')[0]) || 'User',
-              email: firebaseUser.email || '',
-              phone: firebaseUser.phoneNumber || (isAdmin ? '+1 (555) 999-0000' : ''),
-              bloodGroup: 'O+',
-              city: isAdmin ? 'Headquarters' : '',
-              hospitalName: '',
-              role: isAdmin ? 'admin' : 'donor',
-              isDonor: !isAdmin,
-              isAvailable: !isAdmin,
-              isVerified: true,
-              lastDonationDate: '',
-              provider: firebaseUser.providerData?.[0]?.providerId || 'email',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            };
-
-            try {
-              await setDoc(userRef, initialProfile, { merge: true });
-            } catch (err) {
-              console.error("[BloodBridge] Could not write initial user doc to Firestore:", err);
+            // User document does not exist in Firestore (e.g. deleted by Administrator)
+            if (!isAdmin) {
+              console.log("[BloodBridge Sync] User record deleted from database. Purging Auth session...");
+              try {
+                // Permanently delete user from Firebase Authentication
+                await deleteUser(firebaseUser);
+              } catch (delErr) {
+                console.warn("[BloodBridge Sync] Client Auth deletion notice:", delErr.message);
+                try { await signOut(auth); } catch { /* ignore */ }
+              }
+              localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+              setCurrentUser(null);
+              setUserProfile(null);
+            } else {
+              // Auto-initialize admin doc if missing
+              const initialProfile = {
+                uid: firebaseUser.uid,
+                id: firebaseUser.uid,
+                name: 'Super Administrator',
+                email: ADMIN_EMAIL,
+                phone: '+1 (555) 999-0000',
+                bloodGroup: 'O+',
+                city: 'Headquarters',
+                hospitalName: '',
+                role: 'admin',
+                isDonor: false,
+                isAvailable: false,
+                isVerified: true,
+                provider: 'admin',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              };
+              await setDoc(userRef, initialProfile, { merge: true }).catch(console.warn);
+              setUserProfile(initialProfile);
+              setCurrentUser({
+                uid: firebaseUser.uid,
+                email: ADMIN_EMAIL,
+                displayName: 'Super Administrator',
+                role: 'admin'
+              });
             }
-
-            setUserProfile(initialProfile);
-            setCurrentUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: initialProfile.name,
-              photoURL: firebaseUser.photoURL || '',
-              role: initialProfile.role
-            });
           }
           setLoading(false);
         }, (err) => {
@@ -357,6 +365,18 @@ export const AuthProvider = ({ children }) => {
     const userDocRef = doc(db, 'users', firebaseUser.uid);
     const docSnap = await getDoc(userDocRef);
 
+    // If user profile was deleted by administrator from Firestore
+    if (!docSnap.exists() && !isAdminEmail) {
+      try {
+        // Permanently purge deleted account from Firebase Authentication
+        await deleteUser(firebaseUser);
+      } catch (e) {
+        try { await signOut(auth); } catch { /* ignore */ }
+      }
+      localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+      throw new Error("This account has been deleted by the administrator.");
+    }
+
     let profile;
     if (docSnap.exists()) {
       const existingData = docSnap.data();
@@ -373,24 +393,23 @@ export const AuthProvider = ({ children }) => {
         await setDoc(userDocRef, { role: 'admin', isVerified: true, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
       }
     } else {
-      const defaultRole = isAdminEmail ? 'admin' : (selectedRole || 'donor');
-      const defaultIsDonor = defaultRole === 'donor';
+      // Admin profile initialization
       profile = {
         uid: firebaseUser.uid,
         id: firebaseUser.uid,
-        name: firebaseUser.displayName || (isAdminEmail ? 'Super Administrator' : trimmedEmail.split('@')[0]),
+        name: 'Super Administrator',
         email: trimmedEmail,
-        phone: firebaseUser.phoneNumber || (isAdminEmail ? '+1 (555) 999-0000' : ''),
+        phone: '+1 (555) 999-0000',
         bloodGroup: 'O+',
-        city: isAdminEmail ? 'Headquarters' : '',
+        city: 'Headquarters',
         hospitalName: '',
-        role: defaultRole,
-        isDonor: defaultIsDonor,
-        isAvailable: defaultIsDonor,
+        role: 'admin',
+        isDonor: false,
+        isAvailable: false,
         isVerified: true,
         donationsCount: 0,
         lastDonationDate: '',
-        provider: 'email',
+        provider: 'admin',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
