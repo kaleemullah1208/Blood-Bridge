@@ -337,10 +337,25 @@ export const adminUpdateUser = async (uid, updatedFields) => {
 };
 
 /**
- * Admin: Delete User document from Firestore
+ * Admin: Delete User document from Firestore and associated requests
  */
 export const adminDeleteUser = async (uid) => {
   if (!isFirebaseConfigured || !uid) return;
+  
+  // 1. Delete user document from Firestore (triggers onUserDocDeleted sync function)
   const docRef = doc(db, USERS_COLLECTION, uid);
   await deleteDoc(docRef);
+
+  // 2. Cascade delete all emergency blood requests created by this user
+  try {
+    const q = query(collection(db, REQUESTS_COLLECTION), where('createdBy', '==', uid));
+    const snaps = await getDocs(q);
+    const deletePromises = [];
+    snaps.forEach((docSnap) => {
+      deletePromises.push(deleteDoc(docSnap.ref));
+    });
+    await Promise.all(deletePromises);
+  } catch (err) {
+    console.warn("[BloodBridge] Cascade request cleanup notice:", err.message);
+  }
 };
