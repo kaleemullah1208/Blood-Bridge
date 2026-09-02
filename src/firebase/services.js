@@ -16,111 +16,8 @@ import {
 import { db, isFirebaseConfigured } from './config';
 
 // Collection references
-const USERS_COLLECTION = 'users';
-const REQUESTS_COLLECTION = 'blood_requests';
-
-// Initial Seed Data for immediate initial demo state
-export const INITIAL_MOCK_REQUESTS = [
-  {
-    id: 'req-101',
-    patientName: 'Sarah Jenkins',
-    requiredBloodGroup: 'O-',
-    hospitalName: 'City Central Trauma Center, ICU Wing',
-    city: 'New York',
-    unitsRequired: 3,
-    urgencyLevel: 'Critical',
-    contactPhone: '+1 (555) 234-5678',
-    status: 'Active',
-    notes: 'Emergency surgery scheduled in 2 hours. Platelets/Whole blood urgent.',
-    createdBy: 'mock-user-1',
-    createdByName: 'Dr. Marcus Vance',
-    createdAt: new Date(Date.now() - 25 * 60 * 1000)
-  },
-  {
-    id: 'req-102',
-    patientName: 'David Chen',
-    requiredBloodGroup: 'A+',
-    hospitalName: 'Memorial General Hospital',
-    city: 'Los Angeles',
-    unitsRequired: 2,
-    urgencyLevel: 'Urgent',
-    contactPhone: '+1 (555) 876-5432',
-    status: 'Active',
-    notes: 'Thalassemia patient regular transfusion required by evening.',
-    createdBy: 'mock-user-2',
-    createdByName: 'Linda Chen',
-    createdAt: new Date(Date.now() - 95 * 60 * 1000)
-  },
-  {
-    id: 'req-103',
-    patientName: 'Amina Al-Mansoor',
-    requiredBloodGroup: 'B-',
-    hospitalName: 'Northwestern Memorial Clinic',
-    city: 'Chicago',
-    unitsRequired: 1,
-    urgencyLevel: 'Normal',
-    contactPhone: '+1 (555) 345-9876',
-    status: 'Active',
-    notes: 'Elective orthopedic surgery preparation.',
-    createdBy: 'mock-user-3',
-    createdByName: 'Tariq Mansoor',
-    createdAt: new Date(Date.now() - 240 * 60 * 1000)
-  }
-];
-
-export const INITIAL_MOCK_DONORS = [
-  {
-    id: 'donor-demo-1',
-    uid: 'donor-demo-1',
-    name: 'Michael Reynolds',
-    email: 'michael.r@example.com',
-    phone: '+1 (555) 432-1098',
-    bloodGroup: 'O+',
-    city: 'New York',
-    isAvailable: true,
-    isDonor: true,
-    role: 'donor',
-    isVerified: true,
-    donationsCount: 8,
-    createdAt: new Date(Date.now() - 86400000 * 30)
-  },
-  {
-    id: 'donor-demo-2',
-    uid: 'donor-demo-2',
-    name: 'Sophia Patel',
-    email: 'sophia.p@example.com',
-    phone: '+1 (555) 901-2345',
-    bloodGroup: 'O-',
-    city: 'New York',
-    isAvailable: true,
-    isDonor: true,
-    role: 'donor',
-    isVerified: true,
-    donationsCount: 14,
-    createdAt: new Date(Date.now() - 86400000 * 60)
-  }
-];
-
-const LOCAL_STORAGE_REQ_KEY = 'bloodbridge_demo_requests';
-const LOCAL_STORAGE_DONORS_KEY = 'bloodbridge_demo_donors';
-
-const getStoredDemoRequests = () => {
-  const saved = localStorage.getItem(LOCAL_STORAGE_REQ_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch { /* ignore */ }
-  }
-  localStorage.setItem(LOCAL_STORAGE_REQ_KEY, JSON.stringify(INITIAL_MOCK_REQUESTS));
-  return INITIAL_MOCK_REQUESTS;
-};
-
-const getStoredDemoDonors = () => {
-  const saved = localStorage.getItem(LOCAL_STORAGE_DONORS_KEY);
-  if (saved) {
-    try { return JSON.parse(saved); } catch { /* ignore */ }
-  }
-  localStorage.setItem(LOCAL_STORAGE_DONORS_KEY, JSON.stringify(INITIAL_MOCK_DONORS));
-  return INITIAL_MOCK_DONORS;
-};
+export const USERS_COLLECTION = 'users';
+export const REQUESTS_COLLECTION = 'blood_requests';
 
 /**
  * Safe helper to parse Firestore Timestamps, ISO strings, or Date objects
@@ -145,8 +42,7 @@ export const getTimestampMillis = (val) => {
  */
 export const subscribeToActiveBloodRequests = (callback, onError) => {
   if (!isFirebaseConfigured) {
-    const list = getStoredDemoRequests().filter(r => r.status === 'Active');
-    callback(list);
+    callback([]);
     return () => {};
   }
 
@@ -165,13 +61,13 @@ export const subscribeToActiveBloodRequests = (callback, onError) => {
       requests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(requests);
     }, (error) => {
-      console.warn("Firestore active requests fallback:", error.message);
+      console.error("[BloodBridge] Firestore active requests subscription error:", error.code, error.message);
       if (onError) onError(error);
-      callback(getStoredDemoRequests().filter(r => r.status === 'Active'));
+      callback([]);
     });
   } catch (err) {
-    console.error("Error setting up active requests listener:", err);
-    callback(getStoredDemoRequests().filter(r => r.status === 'Active'));
+    console.error("[BloodBridge] Error setting up active requests listener:", err);
+    callback([]);
     return () => {};
   }
 };
@@ -179,9 +75,9 @@ export const subscribeToActiveBloodRequests = (callback, onError) => {
 /**
  * Real-time listener for ALL requests (Admin dashboard)
  */
-export const subscribeToAllBloodRequests = (callback) => {
+export const subscribeToAllBloodRequests = (callback, onError) => {
   if (!isFirebaseConfigured) {
-    callback(getStoredDemoRequests());
+    callback([]);
     return () => {};
   }
 
@@ -195,12 +91,13 @@ export const subscribeToAllBloodRequests = (callback) => {
       requests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(requests);
     }, (error) => {
-      console.warn("Firestore all requests fallback:", error.message);
-      callback(getStoredDemoRequests());
+      console.error("[BloodBridge] Firestore all requests subscription error:", error.code, error.message);
+      if (onError) onError(error);
+      callback([]);
     });
   } catch (err) {
-    console.error("Error listening to all requests:", err);
-    callback(getStoredDemoRequests());
+    console.error("[BloodBridge] Error listening to all requests:", err);
+    callback([]);
     return () => {};
   }
 };
@@ -208,15 +105,14 @@ export const subscribeToAllBloodRequests = (callback) => {
 /**
  * Real-time listener for requests created by a specific user
  */
-export const subscribeToUserRequests = (userId, callback) => {
+export const subscribeToUserRequests = (userId, callback, onError) => {
   if (!userId) {
     callback([]);
     return () => {};
   }
 
   if (!isFirebaseConfigured) {
-    const list = getStoredDemoRequests().filter(r => r.createdBy === userId);
-    callback(list);
+    callback([]);
     return () => {};
   }
 
@@ -234,12 +130,13 @@ export const subscribeToUserRequests = (userId, callback) => {
       userRequests.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(userRequests);
     }, (err) => {
-      console.warn("User requests subscription fallback:", err.message);
-      callback(getStoredDemoRequests().filter(r => r.createdBy === userId));
+      console.error("[BloodBridge] User requests subscription error:", err.code, err.message);
+      if (onError) onError(err);
+      callback([]);
     });
   } catch (err) {
-    console.error("User requests subscription failed:", err);
-    callback(getStoredDemoRequests().filter(r => r.createdBy === userId));
+    console.error("[BloodBridge] User requests subscription failed:", err);
+    callback([]);
     return () => {};
   }
 };
@@ -248,28 +145,17 @@ export const subscribeToUserRequests = (userId, callback) => {
  * Post a new Blood Request to Firestore
  */
 export const createBloodRequest = async (requestData) => {
-  if (!isFirebaseConfigured) {
-    const newReq = {
-      id: 'req-' + Date.now(),
-      ...requestData,
-      status: 'Active',
-      createdAt: new Date().toISOString()
-    };
-    const current = getStoredDemoRequests();
-    const updated = [newReq, ...current];
-    localStorage.setItem(LOCAL_STORAGE_REQ_KEY, JSON.stringify(updated));
-    return newReq.id;
-  }
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
 
   const payload = {
-    patientName: requestData.patientName.trim(),
-    requiredBloodGroup: requestData.requiredBloodGroup,
-    hospitalName: requestData.hospitalName.trim(),
-    city: requestData.city.trim(),
+    patientName: (requestData.patientName || '').trim(),
+    requiredBloodGroup: requestData.requiredBloodGroup || 'O+',
+    hospitalName: (requestData.hospitalName || '').trim(),
+    city: (requestData.city || '').trim(),
     unitsRequired: Number(requestData.unitsRequired) || 1,
     urgencyLevel: requestData.urgencyLevel || 'Normal',
-    contactPhone: requestData.contactPhone.trim(),
-    notes: requestData.notes ? requestData.notes.trim() : '',
+    contactPhone: (requestData.contactPhone || '').trim(),
+    notes: (requestData.notes || '').trim(),
     status: 'Active',
     createdBy: requestData.createdBy,
     createdByName: requestData.createdByName || 'Emergency Seeker',
@@ -285,13 +171,7 @@ export const createBloodRequest = async (requestData) => {
  * Update request status (e.g., 'Fulfilled', 'Cancelled', 'Active')
  */
 export const updateBloodRequestStatus = async (requestId, status) => {
-  if (!isFirebaseConfigured) {
-    const current = getStoredDemoRequests();
-    const updated = current.map(req => req.id === requestId ? { ...req, status } : req);
-    localStorage.setItem(LOCAL_STORAGE_REQ_KEY, JSON.stringify(updated));
-    return;
-  }
-
+  if (!isFirebaseConfigured || !requestId) return;
   const docRef = doc(db, REQUESTS_COLLECTION, requestId);
   await updateDoc(docRef, { 
     status, 
@@ -303,13 +183,7 @@ export const updateBloodRequestStatus = async (requestId, status) => {
  * Delete a blood request
  */
 export const deleteBloodRequest = async (requestId) => {
-  if (!isFirebaseConfigured) {
-    const current = getStoredDemoRequests();
-    const updated = current.filter(req => req.id !== requestId);
-    localStorage.setItem(LOCAL_STORAGE_REQ_KEY, JSON.stringify(updated));
-    return;
-  }
-
+  if (!isFirebaseConfigured || !requestId) return;
   const docRef = doc(db, REQUESTS_COLLECTION, requestId);
   await deleteDoc(docRef);
 };
@@ -317,9 +191,9 @@ export const deleteBloodRequest = async (requestId) => {
 /**
  * Subscribe to Donors (Users with isDonor = true or role = 'donor') in Real-Time
  */
-export const subscribeToDonors = (callback) => {
+export const subscribeToDonors = (callback, onError) => {
   if (!isFirebaseConfigured) {
-    callback(getStoredDemoDonors());
+    callback([]);
     return () => {};
   }
 
@@ -347,23 +221,24 @@ export const subscribeToDonors = (callback) => {
       donors.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
       callback(donors);
     }, (err) => {
-      console.warn("Firestore donor listener fallback:", err.message);
-      callback(getStoredDemoDonors());
+      console.error("[BloodBridge] Firestore donor listener error:", err.code, err.message);
+      if (onError) onError(err);
+      callback([]);
     });
   } catch (err) {
-    console.error("Error subscribing to donors:", err);
-    callback(getStoredDemoDonors());
+    console.error("[BloodBridge] Error subscribing to donors:", err);
+    callback([]);
     return () => {};
   }
 };
 
 /**
  * Subscribe to ALL Registered Users in Real-Time (For Admin Dashboard)
- * Live Firestore snapshot listener that triggers instantly when a user signs up with Gmail or Email
+ * Directly reads the Firestore 'users' collection as the single source of truth.
  */
-export const subscribeToAllUsers = (callback) => {
+export const subscribeToAllUsers = (callback, onError) => {
   if (!isFirebaseConfigured) {
-    callback(getStoredDemoDonors());
+    callback([]);
     return () => {};
   }
 
@@ -399,12 +274,13 @@ export const subscribeToAllUsers = (callback) => {
 
       callback(users);
     }, (err) => {
-      console.warn("Firestore all users snapshot error:", err.message);
-      callback(getStoredDemoDonors());
+      console.error("[BloodBridge] Firestore all users snapshot error:", err.code, err.message);
+      if (onError) onError(err);
+      callback([]);
     });
   } catch (err) {
-    console.error("Error subscribing to all users:", err);
-    callback(getStoredDemoDonors());
+    console.error("[BloodBridge] Error subscribing to all users:", err);
+    callback([]);
     return () => {};
   }
 };
@@ -413,22 +289,7 @@ export const subscribeToAllUsers = (callback) => {
  * Update User profile in Firestore (creates or merges document)
  */
 export const setUserProfileDoc = async (uid, userData) => {
-  if (!uid) return;
-
-  // Update local storage backup
-  const donors = getStoredDemoDonors();
-  const existingIdx = donors.findIndex(d => d.id === uid || d.uid === uid);
-  const updatedRecord = { uid, id: uid, ...userData };
-  if (existingIdx >= 0) {
-    donors[existingIdx] = { ...donors[existingIdx], ...updatedRecord };
-  } else {
-    donors.unshift(updatedRecord);
-  }
-  localStorage.setItem(LOCAL_STORAGE_DONORS_KEY, JSON.stringify(donors));
-
-  if (!isFirebaseConfigured) {
-    return;
-  }
+  if (!isFirebaseConfigured || !uid) return;
 
   const docRef = doc(db, USERS_COLLECTION, uid);
   await setDoc(docRef, {
@@ -442,7 +303,7 @@ export const setUserProfileDoc = async (uid, userData) => {
     hospitalName: userData.hospitalName || '',
     isDonor: userData.isDonor !== undefined ? userData.isDonor : (userData.role === 'donor'),
     isAvailable: userData.isAvailable !== undefined ? userData.isAvailable : true,
-    isVerified: userData.isVerified !== undefined ? userData.isVerified : true,
+    isVerified: userData.isVerified !== undefined ? Boolean(userData.isVerified) : true,
     role: userData.role || 'donor',
     provider: userData.provider || 'email',
     updatedAt: serverTimestamp()
@@ -450,52 +311,36 @@ export const setUserProfileDoc = async (uid, userData) => {
 };
 
 /**
- * Toggle Donor Availability status
+ * Toggle Donor Availability status in Firestore
  */
 export const toggleUserAvailability = async (uid, currentAvailability) => {
+  if (!isFirebaseConfigured || !uid) return !currentAvailability;
   const newStatus = !currentAvailability;
-  const donors = getStoredDemoDonors();
-  const updated = donors.map(d => (d.id === uid || d.uid === uid) ? { ...d, isAvailable: newStatus } : d);
-  localStorage.setItem(LOCAL_STORAGE_DONORS_KEY, JSON.stringify(updated));
-
-  if (isFirebaseConfigured) {
-    const docRef = doc(db, USERS_COLLECTION, uid);
-    await setDoc(docRef, { 
-      isAvailable: newStatus,
-      updatedAt: serverTimestamp() 
-    }, { merge: true });
-  }
+  const docRef = doc(db, USERS_COLLECTION, uid);
+  await setDoc(docRef, { 
+    isAvailable: newStatus,
+    updatedAt: serverTimestamp() 
+  }, { merge: true });
   return newStatus;
 };
 
 /**
- * Admin: Update User details or Role
+ * Admin: Update User details or Role in Firestore
  */
 export const adminUpdateUser = async (uid, updatedFields) => {
-  const donors = getStoredDemoDonors();
-  const updated = donors.map(d => (d.id === uid || d.uid === uid) ? { ...d, ...updatedFields } : d);
-  localStorage.setItem(LOCAL_STORAGE_DONORS_KEY, JSON.stringify(updated));
-
-  if (isFirebaseConfigured) {
-    const docRef = doc(db, USERS_COLLECTION, uid);
-    await setDoc(docRef, {
-      ...updatedFields,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-  }
+  if (!isFirebaseConfigured || !uid) return;
+  const docRef = doc(db, USERS_COLLECTION, uid);
+  await setDoc(docRef, {
+    ...updatedFields,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
 };
 
 /**
- * Admin: Delete User document
+ * Admin: Delete User document from Firestore
  */
 export const adminDeleteUser = async (uid) => {
-  const donors = getStoredDemoDonors();
-  const updated = donors.filter(d => d.id !== uid && d.uid !== uid);
-  localStorage.setItem(LOCAL_STORAGE_DONORS_KEY, JSON.stringify(updated));
-
-  if (isFirebaseConfigured) {
-    const docRef = doc(db, USERS_COLLECTION, uid);
-    await deleteDoc(docRef);
-  }
+  if (!isFirebaseConfigured || !uid) return;
+  const docRef = doc(db, USERS_COLLECTION, uid);
+  await deleteDoc(docRef);
 };
-

@@ -11,7 +11,6 @@ import {
   doc, 
   getDoc, 
   setDoc, 
-  updateDoc, 
   onSnapshot, 
   serverTimestamp 
 } from 'firebase/firestore';
@@ -30,7 +29,7 @@ export const getFriendlyAuthErrorMessage = (error) => {
   
   switch (code) {
     case 'auth/unauthorized-domain':
-      return 'This domain is not authorized for Google Sign-In. Please add your Vercel domain (blood-bridge-iota.vercel.app) to Firebase Console -> Authentication -> Settings -> Authorized domains.';
+      return 'This domain is not authorized for Google Sign-In. Please add your domain to Firebase Console -> Authentication -> Settings -> Authorized domains.';
     case 'auth/email-already-in-use':
       return 'This email address is already registered. Please sign in instead.';
     case 'auth/invalid-email':
@@ -38,7 +37,7 @@ export const getFriendlyAuthErrorMessage = (error) => {
     case 'auth/weak-password':
       return 'Password is too weak. Please use at least 6 characters.';
     case 'auth/wrong-password':
-      return 'Incorrect password. Please verify your credentials or sign in with Google.';
+      return 'Incorrect password. Please verify your credentials.';
     case 'auth/user-not-found':
       return 'No account found with this email address. Please sign up first.';
     case 'auth/invalid-credential':
@@ -63,20 +62,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
 
-  // Track if a manual registration or login is in-flight to prevent onAuthStateChanged overwriting
+  // Track if manual registration is in flight to prevent premature onAuthStateChanged document overrides
   const isRegisteringRef = useRef(false);
 
   // Synchronize Auth State & Real-time Firestore user profile
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setCurrentUser(parsed);
-          setUserProfile(parsed);
-        } catch { /* ignore */ }
-      }
       setLoading(false);
       return;
     }
@@ -109,7 +100,7 @@ export const AuthProvider = ({ children }) => {
               role: profile.role
             });
 
-            // Save clean session
+            // Save clean session cache
             try {
               const sessionData = {
                 uid: firebaseUser.uid,
@@ -124,15 +115,15 @@ export const AuthProvider = ({ children }) => {
               localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(sessionData));
             } catch { /* ignore */ }
           } else if (!isRegisteringRef.current) {
-            // Only create fallback document if not currently in manual registration flow
+            // Auto-heal missing Firestore document for existing Firebase Auth users
             const initialProfile = {
               uid: firebaseUser.uid,
               id: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              name: firebaseUser.displayName || (isAdmin ? 'Super Administrator' : firebaseUser.email?.split('@')[0]) || 'User',
               email: firebaseUser.email || '',
-              phone: firebaseUser.phoneNumber || '',
+              phone: firebaseUser.phoneNumber || (isAdmin ? '+1 (555) 999-0000' : ''),
               bloodGroup: 'O+',
-              city: '',
+              city: isAdmin ? 'Headquarters' : '',
               hospitalName: '',
               role: isAdmin ? 'admin' : 'donor',
               isDonor: !isAdmin,
@@ -147,7 +138,7 @@ export const AuthProvider = ({ children }) => {
             try {
               await setDoc(userRef, initialProfile, { merge: true });
             } catch (err) {
-              console.warn("Could not write initial user doc:", err);
+              console.error("[BloodBridge] Could not write initial user doc to Firestore:", err);
             }
 
             setUserProfile(initialProfile);
@@ -161,24 +152,12 @@ export const AuthProvider = ({ children }) => {
           }
           setLoading(false);
         }, (err) => {
-          console.warn("Firestore user profile snapshot error:", err);
+          console.error("[BloodBridge] Firestore user profile snapshot error:", err);
           setLoading(false);
         });
       } else {
         if (unsubscribeProfile) unsubscribeProfile();
-        // Check for stored admin session
-        const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (parsed.email === ADMIN_EMAIL && parsed.role === 'admin') {
-              setCurrentUser(parsed);
-              setUserProfile(parsed);
-              setLoading(false);
-              return;
-            }
-          } catch { /* ignore */ }
-        }
+        localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
         setCurrentUser(null);
         setUserProfile(null);
         setLoading(false);
@@ -191,33 +170,32 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // 1. Register with Email & Password (Atomic with Cleanup/Recovery)
+  // 1. Register with Email & Password
   const register = async (email, password, { name, phone, bloodGroup, city, role = 'donor', hospitalName = '' }) => {
+    if (!isFirebaseConfigured) {
+      throw new Error("Firebase Authentication is not configured.");
+    }
+
     const trimmedEmail = email.trim().toLowerCase();
     const isAdmin = trimmedEmail === ADMIN_EMAIL.toLowerCase();
     const assignedRole = isAdmin ? 'admin' : role;
     const isDonor = assignedRole === 'donor';
 
     isRegisteringRef.current = true;
-    let uid = 'usr-' + Date.now();
+    let uid = null;
     let firebaseUser = null;
-    let authCreatedNow = false;
 
     try {
-      if (isFirebaseConfigured) {
-        const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-        firebaseUser = userCredential.user;
-        uid = firebaseUser.uid;
-        authCreatedNow = true;
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      firebaseUser = userCredential.user;
+      uid = firebaseUser.uid;
 
-        try {
-          await updateProfile(firebaseUser, { displayName: name.trim() });
-        } catch (e) {
-          console.warn("Could not update display name:", e);
-        }
+      try {
+        await updateProfile(firebaseUser, { displayName: name.trim() });
+      } catch (e) {
+        console.warn("Could not update display name:", e);
       }
 
-      const isoNow = new Date().toISOString();
       const newProfile = {
         uid,
         id: uid,
@@ -231,33 +209,15 @@ export const AuthProvider = ({ children }) => {
         isDonor: isDonor,
         isAvailable: isDonor,
         isVerified: true,
+        donationsCount: 0,
         lastDonationDate: '',
         provider: 'email',
-        createdAt: isoNow,
-        updatedAt: isoNow
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
 
-      if (isFirebaseConfigured) {
-        const userDocRef = doc(db, 'users', uid);
-        try {
-          await setDoc(userDocRef, {
-            ...newProfile,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch (firestoreErr) {
-          console.error("Firestore document write failed during registration:", firestoreErr);
-          // If auth was just created, clean up the orphaned auth account so user is not stuck
-          if (authCreatedNow && firebaseUser) {
-            try {
-              await firebaseUser.delete();
-            } catch (deleteErr) {
-              console.warn("Could not roll back auth user after Firestore failure:", deleteErr);
-            }
-          }
-          throw firestoreErr;
-        }
-      }
+      const userDocRef = doc(db, 'users', uid);
+      await setDoc(userDocRef, newProfile, { merge: true });
 
       const authUser = {
         uid,
@@ -272,7 +232,7 @@ export const AuthProvider = ({ children }) => {
 
       return { user: authUser, profile: newProfile };
     } catch (err) {
-      console.error("Auth register error:", err);
+      console.error("[BloodBridge] Auth register error:", err);
       const friendlyMsg = getFriendlyAuthErrorMessage(err);
       const errorObj = new Error(friendlyMsg || 'Registration failed');
       errorObj.code = err.code;
@@ -324,6 +284,7 @@ export const AuthProvider = ({ children }) => {
           isDonor: !isAdmin,
           isAvailable: !isAdmin,
           isVerified: true,
+          donationsCount: 0,
           lastDonationDate: '',
           provider: 'google',
           createdAt: serverTimestamp(),
@@ -347,7 +308,7 @@ export const AuthProvider = ({ children }) => {
 
       return { user: activeUser, profile };
     } catch (err) {
-      console.error("Auth google login error:", err);
+      console.error("[BloodBridge] Auth google login error:", err);
       const friendlyMsg = getFriendlyAuthErrorMessage(err);
       if (friendlyMsg) {
         const errorObj = new Error(friendlyMsg);
@@ -360,160 +321,102 @@ export const AuthProvider = ({ children }) => {
 
   // 3. Email & Password Login
   const login = async (email, password, { requireAdmin = false, selectedRole = null } = {}) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    const isAdminCredentials = trimmedEmail === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASS;
-
-    // Direct Administrator credential handling
-    if (isAdminCredentials) {
-      let adminUid = 'admin-master-uid';
-      let adminFirebaseUser = null;
-
-      if (isFirebaseConfigured) {
-        try {
-          const cred = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS);
-          adminFirebaseUser = cred.user;
-          adminUid = adminFirebaseUser.uid;
-        } catch (signInErr) {
-          if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
-            try {
-              const cred = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS);
-              adminFirebaseUser = cred.user;
-              adminUid = adminFirebaseUser.uid;
-              await updateProfile(adminFirebaseUser, { displayName: 'Super Administrator' });
-            } catch (createErr) {
-              console.warn("Could not auto-create admin user in Firebase Auth:", createErr);
-            }
-          } else {
-            console.warn("Firebase Auth admin sign-in notice:", signInErr.message);
-          }
-        }
-
-        try {
-          const adminDocRef = doc(db, 'users', adminUid);
-          await setDoc(adminDocRef, {
-            uid: adminUid,
-            id: adminUid,
-            name: 'Super Administrator',
-            email: ADMIN_EMAIL,
-            phone: '+1 (555) 999-0000',
-            bloodGroup: 'O+',
-            city: 'Headquarters',
-            role: 'admin',
-            isDonor: false,
-            isAvailable: false,
-            isVerified: true,
-            provider: 'admin',
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch (docErr) {
-          console.warn("Could not sync admin Firestore doc:", docErr);
-        }
-      }
-
-      const adminProfile = {
-        uid: adminUid,
-        id: adminUid,
-        name: 'Super Administrator',
-        email: ADMIN_EMAIL,
-        phone: '+1 (555) 999-0000',
-        bloodGroup: 'O+',
-        city: 'Headquarters',
-        role: 'admin',
-        isDonor: false,
-        isAvailable: false,
-        isVerified: true,
-        provider: 'admin'
-      };
-
-      const adminUser = {
-        uid: adminUid,
-        email: ADMIN_EMAIL,
-        displayName: 'Super Administrator',
-        role: 'admin'
-      };
-
-      setCurrentUser(adminUser);
-      setUserProfile(adminProfile);
-      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(adminProfile));
-      return { user: adminUser, profile: adminProfile };
-    }
-
     if (!isFirebaseConfigured) {
       throw new Error("Firebase Authentication is not configured.");
     }
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const isAdminEmail = trimmedEmail === ADMIN_EMAIL.toLowerCase();
+
+    let firebaseUser = null;
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-      const user = userCredential.user;
-
-      const userDocRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(userDocRef);
-
-      let profile;
-      if (docSnap.exists()) {
-        const existingData = docSnap.data();
-        profile = {
-          uid: user.uid,
-          id: user.uid,
-          ...existingData,
-          role: trimmedEmail === ADMIN_EMAIL.toLowerCase() ? 'admin' : (existingData.role || 'donor'),
-          isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor' || true),
-          isVerified: existingData.isVerified !== undefined ? Boolean(existingData.isVerified) : true
-        };
-        // Ensure isVerified is true in Firestore
-        if (existingData.isVerified === undefined) {
-          await setDoc(userDocRef, { isVerified: true, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+      firebaseUser = userCredential.user;
+    } catch (authError) {
+      // Auto-create default admin credentials if not yet present in Firebase Auth
+      if (isAdminEmail && password === ADMIN_PASS && 
+          (authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential')) {
+        try {
+          const createCred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+          firebaseUser = createCred.user;
+          await updateProfile(firebaseUser, { displayName: 'Super Administrator' });
+        } catch (createErr) {
+          console.error("[BloodBridge] Failed to auto-create admin user in Firebase Auth:", createErr);
+          throw createErr;
         }
       } else {
-        const defaultRole = trimmedEmail === ADMIN_EMAIL.toLowerCase() ? 'admin' : (selectedRole || 'donor');
-        const defaultIsDonor = defaultRole === 'donor';
-        profile = {
-          uid: user.uid,
-          id: user.uid,
-          name: user.displayName || trimmedEmail.split('@')[0],
-          email: trimmedEmail,
-          phone: user.phoneNumber || '',
-          bloodGroup: 'O+',
-          city: '',
-          hospitalName: '',
-          role: defaultRole,
-          isDonor: defaultIsDonor,
-          isAvailable: defaultIsDonor,
-          isVerified: true,
-          provider: 'email',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        await setDoc(userDocRef, profile, { merge: true });
+        console.error("[BloodBridge] Firebase Login Error:", authError.code, authError.message);
+        const friendlyMsg = getFriendlyAuthErrorMessage(authError);
+        const errObj = new Error(friendlyMsg || 'Invalid email or password.');
+        errObj.code = authError.code;
+        throw errObj;
       }
-
-      if (requireAdmin && profile.role !== 'admin' && trimmedEmail !== ADMIN_EMAIL.toLowerCase()) {
-        await signOut(auth);
-        setCurrentUser(null);
-        setUserProfile(null);
-        localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-        throw new Error("Access Denied: Account does not have administrator privileges.");
-      }
-
-      const activeUser = {
-        uid: user.uid,
-        email: trimmedEmail,
-        displayName: profile.name || user.displayName,
-        role: profile.role
-      };
-
-      setCurrentUser(activeUser);
-      setUserProfile(profile);
-      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(profile));
-
-      return { user: activeUser, profile };
-    } catch (error) {
-      console.error("Firebase Login Error:", error.code, error.message);
-      const friendlyMsg = getFriendlyAuthErrorMessage(error);
-      const errObj = new Error(friendlyMsg || 'Invalid email or password.');
-      errObj.code = error.code;
-      throw errObj;
     }
+
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    const docSnap = await getDoc(userDocRef);
+
+    let profile;
+    if (docSnap.exists()) {
+      const existingData = docSnap.data();
+      profile = {
+        uid: firebaseUser.uid,
+        id: firebaseUser.uid,
+        ...existingData,
+        role: isAdminEmail ? 'admin' : (existingData.role || 'donor'),
+        isDonor: existingData.isDonor !== undefined ? existingData.isDonor : (existingData.role === 'donor' || !isAdminEmail),
+        isVerified: existingData.isVerified !== undefined ? Boolean(existingData.isVerified) : true
+      };
+      if (isAdminEmail && profile.role !== 'admin') {
+        profile.role = 'admin';
+        await setDoc(userDocRef, { role: 'admin', isVerified: true, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+      }
+    } else {
+      const defaultRole = isAdminEmail ? 'admin' : (selectedRole || 'donor');
+      const defaultIsDonor = defaultRole === 'donor';
+      profile = {
+        uid: firebaseUser.uid,
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName || (isAdminEmail ? 'Super Administrator' : trimmedEmail.split('@')[0]),
+        email: trimmedEmail,
+        phone: firebaseUser.phoneNumber || (isAdminEmail ? '+1 (555) 999-0000' : ''),
+        bloodGroup: 'O+',
+        city: isAdminEmail ? 'Headquarters' : '',
+        hospitalName: '',
+        role: defaultRole,
+        isDonor: defaultIsDonor,
+        isAvailable: defaultIsDonor,
+        isVerified: true,
+        donationsCount: 0,
+        lastDonationDate: '',
+        provider: 'email',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      await setDoc(userDocRef, profile, { merge: true });
+    }
+
+    if (requireAdmin && profile.role !== 'admin' && !isAdminEmail) {
+      await signOut(auth);
+      setCurrentUser(null);
+      setUserProfile(null);
+      localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+      throw new Error("Access Denied: Account does not have administrator privileges.");
+    }
+
+    const activeUser = {
+      uid: firebaseUser.uid,
+      email: trimmedEmail,
+      displayName: profile.name || firebaseUser.displayName,
+      role: profile.role
+    };
+
+    setCurrentUser(activeUser);
+    setUserProfile(profile);
+    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(profile));
+
+    return { user: activeUser, profile };
   };
 
   // 4. Sign Out
@@ -531,7 +434,7 @@ export const AuthProvider = ({ children }) => {
     setShowOnboardingModal(false);
   };
 
-  // 5. Update Profile details in Firestore & Context (Safe Upsert)
+  // 5. Update Profile details in Firestore & Context
   const updateUserData = async (updatedFields) => {
     if (!currentUser) throw new Error("Must be logged in to update profile");
 
@@ -608,7 +511,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -616,4 +518,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

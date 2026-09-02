@@ -7,10 +7,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
       return isAuthenticated() && (
         (request.auth.token != null && request.auth.token.email == 'admin@gmail.com') ||
@@ -20,45 +16,28 @@ service cloud.firestore {
     }
 
     // 1. Users Collection
-    // - Anyone (including unauthenticated visitors) can read donor profiles for emergency searches
+    // - Anyone can read registered donors and users (directory & emergency searches)
     // - Authenticated users can create & update their own profile (or admin)
     // - Admins can read, update, and delete any user profile
     match /users/{userId} {
       allow read: if true;
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
 
     // 2. Blood Requests Collection
     // - Anyone can view active emergency requests
     // - Authenticated users can create blood requests
-    // - Request creator or Admins can update status (Fulfilled/Cancelled) or delete
+    // - Authenticated users or Admins can update status or delete
     match /blood_requests/{requestId} {
       allow read: if true;
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        (resource != null && resource.data.createdBy == request.auth.uid) || 
-        isAdmin()
-      );
-      allow delete: if isAuthenticated() && (
-        (resource != null && resource.data.createdBy == request.auth.uid) || 
-        isAdmin()
-      );
+      allow update, delete: if isAuthenticated();
     }
 
     // 3. Notifications Collection
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (
-        resource == null || 
-        resource.data.userId == request.auth.uid || 
-        isAdmin()
-      );
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (
-        (resource != null && resource.data.userId == request.auth.uid) || 
-        isAdmin()
-      );
+      allow read, write: if isAuthenticated();
     }
 
     // Default fallback rule for any other collection
@@ -67,4 +46,3 @@ service cloud.firestore {
     }
   }
 }
-

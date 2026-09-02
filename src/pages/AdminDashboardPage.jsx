@@ -86,16 +86,20 @@ export const AdminDashboardPage = () => {
   const refreshUnsub = useRef(null);
 
   const handleManualRefresh = () => {
-    if (refreshUnsub.current && typeof refreshUnsub.current === 'function') {
-      refreshUnsub.current();
-    }
     setRefreshing(true);
-    const unsub = subscribeToAllUsers((data) => {
+    const unsubUsers = subscribeToAllUsers((data) => {
       setUsers(data);
       setRefreshing(false);
-      showInfo("Realtime user database synchronized with Firebase.");
+      showInfo("Real-time database synchronized with Firebase.");
     });
-    refreshUnsub.current = unsub;
+    const unsubReqs = subscribeToAllBloodRequests((data) => {
+      setRequests(data);
+    });
+
+    setTimeout(() => {
+      if (typeof unsubUsers === 'function') unsubUsers();
+      if (typeof unsubReqs === 'function') unsubReqs();
+    }, 1500);
   };
 
   // Handler for Admin Quick Login
