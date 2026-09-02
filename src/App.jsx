@@ -10,6 +10,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminRoute } from './components/AdminRoute';
 
 import { RouteLoadingIndicator } from './components/RouteLoadingIndicator';
+import { BrandPreloader } from './components/BrandPreloader';
 
 // Pages
 import { HomePage } from './pages/HomePage';
@@ -28,6 +29,9 @@ export const App = () => {
       <ToastProvider>
         <AuthProvider>
           <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+            {/* Initial Site Entry Splash Preloader (1.8s) */}
+            <BrandPreloader duration={1800} />
+
             {/* Top Arterial Route Progress Bar & Transition */}
             <RouteLoadingIndicator />
 
